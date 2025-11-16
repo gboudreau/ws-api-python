@@ -695,6 +695,10 @@ class WealthsimpleAPI(WealthsimpleAPIBase):
             program = "- Visa Infinite" if act['rewardProgram'] == 'CREDIT_CARD_VISA_INFINITE_REWARDS' else ''
             act['description'] = f"Cash back {program}".rstrip()
 
+        elif act['type'] == 'SPEND' and act['subType'] == 'PREPAID':
+            merchant = act['spendMerchant']
+            act['description'] = f"Purchase: {merchant}"
+
         # TODO: Add other types as needed
 
     def security_id_to_symbol(self, security_id: str) -> str:
