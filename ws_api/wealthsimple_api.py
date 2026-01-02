@@ -543,7 +543,7 @@ class WealthsimpleAPI(WealthsimpleAPIBase):
     def _activity_add_description(self, act):
         act['description'] = f"{act['type']}: {act['subType']}"
 
-        if act['type'] == 'INTERNAL_TRANSFER':
+        if act['type'] == 'INTERNAL_TRANSFER' or act['type'] == 'ASSET_MOVEMENT':
             accounts = self.get_accounts(False)
             matching = [acc for acc in accounts if acc['id'] == act['opposingAccountId']]
             target_account = matching.pop() if matching else None
@@ -552,10 +552,8 @@ class WealthsimpleAPI(WealthsimpleAPIBase):
                 if target_account else
                 act['opposingAccountId']
             )
-            if act['subType'] == 'SOURCE':
-                act['description'] = f"Transfer out: Transfer to Wealthsimple {account_description}"
-            else:
-                act['description'] = f"Transfer in: Transfer from Wealthsimple {account_description}"
+            direction = 'to' if act['subType'] == 'SOURCE' else 'from'
+            act['description'] = f"Money transfer: {direction} Wealthsimple {account_description}"
 
         elif act['type'] in ['DIY_BUY', 'DIY_SELL']:
             verb = act['subType'].replace('_', ' ').capitalize()
