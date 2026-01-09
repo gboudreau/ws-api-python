@@ -713,10 +713,14 @@ class WealthsimpleAPI(WealthsimpleAPIBase):
     def security_id_to_symbol(self, security_id: str) -> str:
         security_symbol = f"[{security_id}]"
         if self.security_market_data_cache_getter:
-            market_data = self.get_security_market_data(security_id)
-            if isinstance(market_data, dict) and market_data['stock']:
-                stock = market_data['stock']
-                security_symbol = f"{stock['primaryExchange']}:{stock['symbol']}"
+            try:
+                market_data = self.get_security_market_data(security_id)
+                if isinstance(market_data, dict) and market_data.get('stock'):
+                    stock = market_data['stock']
+                    security_symbol = f"{stock['primaryExchange']}:{stock['symbol']}"
+            except WSApiException:
+                # Some securities cannot be looked up (e.g., delisted or special securities)
+                pass
         return security_symbol
 
     def get_etf_details(self, funding_id):
