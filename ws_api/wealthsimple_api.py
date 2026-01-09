@@ -556,9 +556,13 @@ class WealthsimpleAPI(WealthsimpleAPIBase):
             act['description'] = f"Money transfer: {direction} Wealthsimple {account_description}"
 
         elif act['type'] in ['DIY_BUY', 'DIY_SELL', 'MANAGED_BUY', 'MANAGED_SELL']:
-            verb = act['subType'].replace('_', ' ').capitalize()
+            # subType is None in some cases, so we can't rely on it up front.
+            # This could be the case for MANAGED actions, so we handle that separately.
+            verb = ''
             if 'MANAGED' in act['type']:
                 verb = "Managed transaction"
+            else:
+                verb = act['subType'].replace('_', ' ').capitalize()
             action = 'buy' if act['type'] == 'DIY_BUY' or act['type'] == 'MANAGED_BUY' else 'sell'
             security = self.security_id_to_symbol(act['securityId'])
             if act['assetQuantity'] is None:
