@@ -710,6 +710,15 @@ class WealthsimpleAPI(WealthsimpleAPIBase):
             merchant = act['spendMerchant']
             act['description'] = f"Purchase: {merchant}"
 
+        elif act['type'] == 'INTEREST_CHARGE':
+            if act['subType'] == 'MARGIN_INTEREST':
+                act['description'] = "Interest Charge: margin interest"
+            else:
+                act['description'] = "Interest Charge"
+
+        elif act['type'] == 'FEE' and act['subType'] == 'MANAGEMENT_FEE':
+            act['description'] = "Management fee"
+
         # TODO: Add other types as needed
 
     def security_id_to_symbol(self, security_id: str) -> str:
