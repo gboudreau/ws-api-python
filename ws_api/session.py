@@ -18,7 +18,6 @@ class OAuthSession(ABC):
         self.refresh_token = None
 
 
-
 class WSAPISession(OAuthSession):
     """
     A class representing a WSAPI session, extending OAuthSession.
