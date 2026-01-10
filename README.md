@@ -7,13 +7,13 @@ Installation
 ------------
 
 ```bash
-pip install ws-api
+uv add ws-api
 ```
 
 Usage
 -----
 
-Note: You'll need the keyring package to run the code below. Install with: `pip install keyring`
+Note: You'll need the keyring package to run the code below. Install with: `uv add keyring`
 
 ```python
 from datetime import datetime

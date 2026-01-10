@@ -1,15 +1,18 @@
-
 class CurlException(Exception):
     pass
+
 
 class ManualLoginRequired(Exception):
     pass
 
+
 class OTPRequiredException(Exception):
     pass
 
+
 class UnexpectedException(Exception):
     pass
+
 
 class WSApiException(Exception):
     def __init__(self, message: str, response=None):
@@ -25,6 +28,7 @@ class WSApiException(Exception):
 
     def __str__(self):
         return f"{super().__str__()}; Response: {self.response}"
+
 
 class LoginFailedException(WSApiException):
     pass

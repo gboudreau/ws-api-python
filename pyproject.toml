@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ws-api"
+version = "0.28.1"
+description = "Access your Wealthsimple account using their (GraphQL) API."
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+  {name = "Guillaume Boudreau", email = "guillaume@pommepause.com"},
+]
+maintainers = [
+  {name = "Guillaume Boudreau", email = "guillaume@pommepause.com"},
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.13",
+]
+requires-python = ">=3.10"
+dependencies = [
+  "requests",
+]
+keywords = ["wealthsimple"]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "ruff",
+]
+
+[project.urls]
+Homepage = "https://github.com/gboudreau/ws-api-python"
+Repository = "https://github.com/gboudreau/ws-api-python"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ws_api"]
+
+[dependency-groups]
+dev = [
+  "pytest",
+  "pytest-cov>=7.0.0",
+  "ruff",
+]
