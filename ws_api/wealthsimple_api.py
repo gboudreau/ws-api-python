@@ -17,6 +17,26 @@ from ws_api.exceptions import (
 )
 from ws_api.session import WSAPISession
 
+# Mapping of account types to human-readable descriptions
+_ACCOUNT_TYPE_DESCRIPTIONS = {
+    "SELF_DIRECTED_RRSP": "RRSP: self-directed",
+    "MANAGED_RRSP": "RRSP: managed",
+    "SELF_DIRECTED_SPOUSAL_RRSP": "RRSP: self-directed spousal",
+    "SELF_DIRECTED_TFSA": "TFSA: self-directed",
+    "MANAGED_TFSA": "TFSA: managed",
+    "SELF_DIRECTED_FHSA": "FHSA: self-directed",
+    "MANAGED_FHSA": "FHSA: managed",
+    "SELF_DIRECTED_NON_REGISTERED": "Non-registered: self-directed",
+    "SELF_DIRECTED_JOINT_NON_REGISTERED": "Non-registered: self-directed - joint",
+    "SELF_DIRECTED_NON_REGISTERED_MARGIN": "Non-registered: self-directed margin",
+    "MANAGED_JOINT": "Non-registered: managed - joint",
+    "SELF_DIRECTED_CRYPTO": "Crypto",
+    "SELF_DIRECTED_RRIF": "RRIF: self-directed",
+    "SELF_DIRECTED_SPOUSAL_RRIF": "RRIF: self-directed spousal",
+    "CREDIT_CARD": "Credit card",
+    "SELF_DIRECTED_LIRA": "LIRA: self-directed",
+}
+
 
 class WealthsimpleAPIBase:
     OAUTH_BASE_URL = "https://api.production.wealthsimple.com/v1/oauth/v2"
@@ -442,64 +462,36 @@ class WealthsimpleAPI(WealthsimpleAPIBase):
         account["number"] = account["id"]
         # This is the account number visible in the WS app:
         for ca in account["custodianAccounts"]:
-            if (ca["branch"] in ["WS", "TR"]) and ca["status"] == "open":
+            if ca["branch"] in ("WS", "TR") and ca["status"] == "open":
                 account["number"] = ca["id"]
-
-        # Default
-        account["description"] = account["unifiedAccountType"]
 
         if account.get("nickname"):
             account["description"] = account["nickname"]
-        elif account["unifiedAccountType"] == "CASH":
+            return
+
+        account_type = account["unifiedAccountType"]
+
+        # Special case: CASH depends on owner configuration
+        if account_type == "CASH":
             account["description"] = (
                 "Cash: joint"
                 if account["accountOwnerConfiguration"] == "MULTI_OWNER"
                 else "Cash"
             )
-        elif account["unifiedAccountType"] == "SELF_DIRECTED_RRSP":
-            account["description"] = "RRSP: self-directed"
-        elif account["unifiedAccountType"] == "MANAGED_RRSP":
-            account["description"] = "RRSP: managed"
-        elif account["unifiedAccountType"] == "SELF_DIRECTED_SPOUSAL_RRSP":
-            account["description"] = "RRSP: self-directed spousal"
-        elif account["unifiedAccountType"] == "SELF_DIRECTED_TFSA":
-            account["description"] = "TFSA: self-directed"
-        elif account["unifiedAccountType"] == "MANAGED_TFSA":
-            account["description"] = "TFSA: managed"
-        elif account["unifiedAccountType"] == "SELF_DIRECTED_FHSA":
-            account["description"] = f"FHSA: self-directed"
-        elif account["unifiedAccountType"] == "MANAGED_FHSA":
-            account["description"] = f"FHSA: managed"
-        elif account["unifiedAccountType"] == "SELF_DIRECTED_NON_REGISTERED":
-            account["description"] = "Non-registered: self-directed"
-        elif account["unifiedAccountType"] == "SELF_DIRECTED_JOINT_NON_REGISTERED":
-            account["description"] = "Non-registered: self-directed - joint"
-        elif account["unifiedAccountType"] == "SELF_DIRECTED_NON_REGISTERED_MARGIN":
-            account["description"] = "Non-registered: self-directed margin"
-        elif account["unifiedAccountType"] == "MANAGED_JOINT":
-            account["description"] = "Non-registered: managed - joint"
-        elif account["unifiedAccountType"] == "SELF_DIRECTED_CRYPTO":
-            account["description"] = "Crypto"
-        elif account["unifiedAccountType"] == "SELF_DIRECTED_RRIF":
-            account["description"] = "RRIF: self-directed"
-        elif account["unifiedAccountType"] == "SELF_DIRECTED_SPOUSAL_RRIF":
-            account["description"] = "RRIF: self-directed spousal"
-        elif account["unifiedAccountType"] == "CREDIT_CARD":
-            account["description"] = "Credit card"
-        elif account["unifiedAccountType"] == "MANAGED_NON_REGISTERED":
-            if any(
-                feature["name"] == "PRIVATE_CREDIT"
-                for feature in account["accountFeatures"]
-            ):
+        # Special case: MANAGED_NON_REGISTERED depends on features
+        elif account_type == "MANAGED_NON_REGISTERED":
+            features = {f["name"] for f in account["accountFeatures"]}
+            if "PRIVATE_CREDIT" in features:
                 account["description"] = "Non-registered: managed - private credit"
-            if any(
-                feature["name"] == "PRIVATE_EQUITY"
-                for feature in account["accountFeatures"]
-            ):
+            elif "PRIVATE_EQUITY" in features:
                 account["description"] = "Non-registered: managed - private equity"
-        elif account["unifiedAccountType"] == "SELF_DIRECTED_LIRA":
-            account["description"] = "LIRA: self-directed"
-        # TODO: Add other types as needed
+            else:
+                account["description"] = account_type
+        # Simple lookup for all other types
+        else:
+            account["description"] = _ACCOUNT_TYPE_DESCRIPTIONS.get(
+                account_type, account_type
+            )
 
     def get_account_balances(self, account_id):
         accounts = self.do_graphql_query(

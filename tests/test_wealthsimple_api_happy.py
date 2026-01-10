@@ -174,6 +174,72 @@ def test_account_add_description_cash(api):
     assert account["number"] == "cust123"
 
 
+def test_account_add_description_cash_joint(api):
+    """Test CASH type with MULTI_OWNER returns 'Cash: joint'."""
+    account = {
+        "id": "acc1",
+        "unifiedAccountType": "CASH",
+        "accountOwnerConfiguration": "MULTI_OWNER",
+        "accountFeatures": [],
+        "custodianAccounts": [],
+    }
+    api._account_add_description(account)
+    assert account["description"] == "Cash: joint"
+
+
+def test_account_add_description_managed_private_credit(api):
+    """Test MANAGED_NON_REGISTERED with PRIVATE_CREDIT feature."""
+    account = {
+        "id": "acc1",
+        "unifiedAccountType": "MANAGED_NON_REGISTERED",
+        "accountOwnerConfiguration": "SINGLE_OWNER",
+        "accountFeatures": [{"name": "PRIVATE_CREDIT"}],
+        "custodianAccounts": [],
+    }
+    api._account_add_description(account)
+    assert account["description"] == "Non-registered: managed - private credit"
+
+
+def test_account_add_description_managed_private_equity(api):
+    """Test MANAGED_NON_REGISTERED with PRIVATE_EQUITY feature."""
+    account = {
+        "id": "acc1",
+        "unifiedAccountType": "MANAGED_NON_REGISTERED",
+        "accountOwnerConfiguration": "SINGLE_OWNER",
+        "accountFeatures": [{"name": "PRIVATE_EQUITY"}],
+        "custodianAccounts": [],
+    }
+    api._account_add_description(account)
+    assert account["description"] == "Non-registered: managed - private equity"
+
+
+def test_account_add_description_nickname_override(api):
+    """Test that nickname takes precedence over unifiedAccountType."""
+    account = {
+        "id": "acc1",
+        "unifiedAccountType": "SELF_DIRECTED_RRSP",
+        "nickname": "My Retirement Fund",
+        "accountOwnerConfiguration": "SINGLE_OWNER",
+        "accountFeatures": [],
+        "custodianAccounts": [],
+    }
+    api._account_add_description(account)
+    assert account["description"] == "My Retirement Fund"
+
+
+def test_account_add_description_unknown_type_fallback(api):
+    """Test that unknown account types fall back to unifiedAccountType value."""
+    account = {
+        "id": "acc1",
+        "unifiedAccountType": "SOME_FUTURE_TYPE",
+        "accountOwnerConfiguration": "SINGLE_OWNER",
+        "accountFeatures": [],
+        "custodianAccounts": [],
+    }
+    api._account_add_description(account)
+    assert account["description"] == "SOME_FUTURE_TYPE"
+
+
 def test_get_account_balances(api):
     """Test get_account_balances happy path."""
     fake_accounts = [
