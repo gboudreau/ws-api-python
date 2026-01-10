@@ -1,45 +1,41 @@
+from dataclasses import dataclass, asdict
 import json
-from abc import ABC
 
 
-class OAuthSession(ABC):
+@dataclass
+class OAuthSession:
     """
     A class representing an OAuth session.
 
     Attributes:
-        client_id (str or None): OAuth Client ID, used in OAuth requests.
-        access_token (str or None): OAuth Access Token, used to authenticate API requests.
-        refresh_token (str or None): OAuth Refresh Token, used to obtain new access tokens when they expire.
+        client_id: OAuth Client ID, used in OAuth requests.
+        access_token: OAuth Access Token, used to authenticate API requests.
+        refresh_token: OAuth Refresh Token, used to obtain new access tokens when they expire.
     """
 
-    def __init__(self):
-        self.client_id: str | None = None
-        self.access_token = None
-        self.refresh_token = None
+    client_id: str | None = None
+    access_token: str | None = None
+    refresh_token: str | None = None
 
 
+@dataclass
 class WSAPISession(OAuthSession):
     """
     A class representing a WSAPI session, extending OAuthSession.
 
     Attributes:
-        session_id (str or None): Session ID, sent in headers for OAuth requests.
-        wssdi (str or None): Device ID, sent in headers of API requests.
-        token_info (object or None): Cached result of getTokenInfo().
+        session_id: Session ID, sent in headers for OAuth requests.
+        wssdi: Device ID, sent in headers of API requests.
+        token_info: Cached result of getTokenInfo().
     """
 
-    def __init__(self):
-        super().__init__()
-        self.session_id: str | None = None
-        self.wssdi: str | None = None
-        self.token_info = None
+    session_id: str | None = None
+    wssdi: str | None = None
+    token_info: dict | None = None
 
-    def to_json(self):
-        return json.dumps(self, default=lambda o: o.__dict__, ensure_ascii=False)
+    def to_json(self) -> str:
+        return json.dumps(asdict(self), ensure_ascii=False)
 
     @classmethod
-    def from_json(cls, json_str):
-        data = json.loads(json_str)
-        obj = cls()
-        obj.__dict__.update(data)
-        return obj
+    def from_json(cls, json_str: str) -> "WSAPISession":
+        return cls(**json.loads(json_str))
