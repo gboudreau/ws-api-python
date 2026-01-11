@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ws_api.exceptions import WSApiException
+from ws_api.formatters import format_account_description
 from ws_api.session import WSAPISession
 from ws_api.wealthsimple_api import WealthsimpleAPI, WealthsimpleAPIBase
 
@@ -155,7 +156,7 @@ def test_account_add_description(api, unified_type, expected_desc):
         "accountFeatures": [],
         "custodianAccounts": [],
     }
-    api._account_add_description(account)
+    format_account_description(account)
     assert account["description"] == expected_desc
 
 
@@ -169,7 +170,7 @@ def test_account_add_description_cash(api):
         "accountFeatures": [],
         "custodianAccounts": [{"branch": "WS", "id": "cust123", "status": "open"}],
     }
-    api._account_add_description(account)
+    format_account_description(account)
     assert account["description"] == "Cash"
     assert account["number"] == "cust123"
 
@@ -183,7 +184,7 @@ def test_account_add_description_cash_joint(api):
         "accountFeatures": [],
         "custodianAccounts": [],
     }
-    api._account_add_description(account)
+    format_account_description(account)
     assert account["description"] == "Cash: joint"
 
 
@@ -196,7 +197,7 @@ def test_account_add_description_managed_private_credit(api):
         "accountFeatures": [{"name": "PRIVATE_CREDIT"}],
         "custodianAccounts": [],
     }
-    api._account_add_description(account)
+    format_account_description(account)
     assert account["description"] == "Non-registered: managed - private credit"
 
 
@@ -209,7 +210,7 @@ def test_account_add_description_managed_private_equity(api):
         "accountFeatures": [{"name": "PRIVATE_EQUITY"}],
         "custodianAccounts": [],
     }
-    api._account_add_description(account)
+    format_account_description(account)
     assert account["description"] == "Non-registered: managed - private equity"
 
 
@@ -223,7 +224,7 @@ def test_account_add_description_nickname_override(api):
         "accountFeatures": [],
         "custodianAccounts": [],
     }
-    api._account_add_description(account)
+    format_account_description(account)
     assert account["description"] == "My Retirement Fund"
 
 
@@ -236,7 +237,7 @@ def test_account_add_description_unknown_type_fallback(api):
         "accountFeatures": [],
         "custodianAccounts": [],
     }
-    api._account_add_description(account)
+    format_account_description(account)
     assert account["description"] == "SOME_FUTURE_TYPE"
 
 
