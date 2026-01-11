@@ -15,50 +15,18 @@ from ws_api.exceptions import (
     UnexpectedException,
     WSApiException,
 )
+from ws_api.formatters import (
+    format_account_description,
+    format_activity_description,
+)
+from ws_api.graphql_queries import GRAPHQL_QUERIES
 from ws_api.session import WSAPISession
-
-# Mapping of account types to human-readable descriptions
-_ACCOUNT_TYPE_DESCRIPTIONS = {
-    "SELF_DIRECTED_RRSP": "RRSP: self-directed",
-    "MANAGED_RRSP": "RRSP: managed",
-    "SELF_DIRECTED_SPOUSAL_RRSP": "RRSP: self-directed spousal",
-    "SELF_DIRECTED_TFSA": "TFSA: self-directed",
-    "MANAGED_TFSA": "TFSA: managed",
-    "SELF_DIRECTED_FHSA": "FHSA: self-directed",
-    "MANAGED_FHSA": "FHSA: managed",
-    "SELF_DIRECTED_NON_REGISTERED": "Non-registered: self-directed",
-    "SELF_DIRECTED_JOINT_NON_REGISTERED": "Non-registered: self-directed - joint",
-    "SELF_DIRECTED_NON_REGISTERED_MARGIN": "Non-registered: self-directed margin",
-    "MANAGED_JOINT": "Non-registered: managed - joint",
-    "SELF_DIRECTED_CRYPTO": "Crypto",
-    "SELF_DIRECTED_RRIF": "RRIF: self-directed",
-    "SELF_DIRECTED_SPOUSAL_RRIF": "RRIF: self-directed spousal",
-    "CREDIT_CARD": "Credit card",
-    "SELF_DIRECTED_LIRA": "LIRA: self-directed",
-}
 
 
 class WealthsimpleAPIBase:
     OAUTH_BASE_URL = "https://api.production.wealthsimple.com/v1/oauth/v2"
     GRAPHQL_URL = "https://my.wealthsimple.com/graphql"
     GRAPHQL_VERSION = "12"
-
-    GRAPHQL_QUERIES = {
-        "FetchAllAccountFinancials": "query FetchAllAccountFinancials($identityId: ID!, $startDate: Date, $pageSize: Int = 25, $cursor: String) {\n  identity(id: $identityId) {\n    id\n    ...AllAccountFinancials\n    __typename\n  }\n}\n\nfragment AllAccountFinancials on Identity {\n  accounts(filter: {}, first: $pageSize, after: $cursor) {\n    pageInfo {\n      hasNextPage\n      endCursor\n      __typename\n    }\n    edges {\n      cursor\n      node {\n        ...AccountWithFinancials\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nfragment AccountWithFinancials on Account {\n  ...AccountWithLink\n  ...AccountFinancials\n  __typename\n}\n\nfragment AccountWithLink on Account {\n  ...Account\n  linkedAccount {\n    ...Account\n    __typename\n  }\n  __typename\n}\n\nfragment Account on Account {\n  ...AccountCore\n  custodianAccounts {\n    ...CustodianAccount\n    __typename\n  }\n  __typename\n}\n\nfragment AccountCore on Account {\n  id\n  archivedAt\n  branch\n  closedAt\n  createdAt\n  cacheExpiredAt\n  currency\n  requiredIdentityVerification\n  unifiedAccountType\n  supportedCurrencies\n  nickname\n  status\n  accountOwnerConfiguration\n  accountFeatures {\n    ...AccountFeature\n    __typename\n  }\n  accountOwners {\n    ...AccountOwner\n    __typename\n  }\n  type\n  __typename\n}\n\nfragment AccountFeature on AccountFeature {\n  name\n  enabled\n  __typename\n}\n\nfragment AccountOwner on AccountOwner {\n  accountId\n  identityId\n  accountNickname\n  clientCanonicalId\n  accountOpeningAgreementsSigned\n  name\n  email\n  ownershipType\n  activeInvitation {\n    ...AccountOwnerInvitation\n    __typename\n  }\n  sentInvitations {\n    ...AccountOwnerInvitation\n    __typename\n  }\n  __typename\n}\n\nfragment AccountOwnerInvitation on AccountOwnerInvitation {\n  id\n  createdAt\n  inviteeName\n  inviteeEmail\n  inviterName\n  inviterEmail\n  updatedAt\n  sentAt\n  status\n  __typename\n}\n\nfragment CustodianAccount on CustodianAccount {\n  id\n  branch\n  custodian\n  status\n  updatedAt\n  __typename\n}\n\nfragment AccountFinancials on Account {\n  id\n  custodianAccounts {\n    id\n    branch\n    financials {\n      current {\n        ...CustodianAccountCurrentFinancialValues\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  financials {\n    currentCombined {\n      id\n      ...AccountCurrentFinancials\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nfragment CustodianAccountCurrentFinancialValues on CustodianAccountCurrentFinancialValues {\n  deposits {\n    ...Money\n    __typename\n  }\n  earnings {\n    ...Money\n    __typename\n  }\n  netDeposits {\n    ...Money\n    __typename\n  }\n  netLiquidationValue {\n    ...Money\n    __typename\n  }\n  withdrawals {\n    ...Money\n    __typename\n  }\n  __typename\n}\n\nfragment Money on Money {\n  amount\n  cents\n  currency\n  __typename\n}\n\nfragment AccountCurrentFinancials on AccountCurrentFinancials {\n  id\n  netLiquidationValue {\n    ...Money\n    __typename\n  }\n  netDeposits {\n    ...Money\n    __typename\n  }\n  simpleReturns(referenceDate: $startDate) {\n    ...SimpleReturns\n    __typename\n  }\n  totalDeposits {\n    ...Money\n    __typename\n  }\n  totalWithdrawals {\n    ...Money\n    __typename\n  }\n  __typename\n}\n\nfragment SimpleReturns on SimpleReturns {\n  amount {\n    ...Money\n    __typename\n  }\n  asOf\n  rate\n  referenceDate\n  __typename\n}",
-        "FetchActivityFeedItems": "query FetchActivityFeedItems($first: Int, $cursor: Cursor, $condition: ActivityCondition, $orderBy: [ActivitiesOrderBy!] = OCCURRED_AT_DESC) {\n  activityFeedItems(\n    first: $first\n    after: $cursor\n    condition: $condition\n    orderBy: $orderBy\n  ) {\n    edges {\n      node {\n        ...Activity\n        __typename\n      }\n      __typename\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment Activity on ActivityFeedItem {\n  accountId\n  aftOriginatorName\n  aftTransactionCategory\n  aftTransactionType\n  amount\n  amountSign\n  assetQuantity\n  assetSymbol\n  canonicalId\n  currency\n  eTransferEmail\n  eTransferName\n  externalCanonicalId\n  identityId\n  institutionName\n  occurredAt\n  p2pHandle\n  p2pMessage\n  spendMerchant\n  securityId\n  billPayCompanyName\n  billPayPayeeNickname\n  redactedExternalAccountNumber\n  opposingAccountId\n  status\n  subType\n  type\n  strikePrice\n  contractType\n  expiryDate\n  chequeNumber\n  provisionalCreditAmount\n  primaryBlocker\n  interestRate\n  frequency\n  counterAssetSymbol\n  rewardProgram\n  counterPartyCurrency\n  counterPartyCurrencyAmount\n  counterPartyName\n  fxRate\n  fees\n  reference\n  __typename\n}",
-        "FetchSecuritySearchResult": "query FetchSecuritySearchResult($query: String!) {\n  securitySearch(input: {query: $query}) {\n    results {\n      ...SecuritySearchResult\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment SecuritySearchResult on Security {\n  id\n  buyable\n  status\n  stock {\n    symbol\n    name\n    primaryExchange\n    __typename\n  }\n  securityGroups {\n    id\n    name\n    __typename\n  }\n  quoteV2 {\n    ... on EquityQuote {\n      marketStatus\n      __typename\n    }\n    __typename\n  }\n  __typename\n}",
-        "FetchSecurityHistoricalQuotes": 'query FetchSecurityHistoricalQuotes($id: ID!, $timerange: String! = "1d") {\n  security(id: $id) {\n    id\n    historicalQuotes(timeRange: $timerange) {\n      ...HistoricalQuote\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment HistoricalQuote on HistoricalQuote {\n  adjustedPrice\n  currency\n  date\n  securityId\n  time\n  __typename\n}',
-        "FetchAccountsWithBalance": "query FetchAccountsWithBalance($ids: [String!]!, $type: BalanceType!) {\n  accounts(ids: $ids) {\n    ...AccountWithBalance\n    __typename\n  }\n}\n\nfragment AccountWithBalance on Account {\n  id\n  custodianAccounts {\n    id\n    financials {\n      ... on CustodianAccountFinancialsSo {\n        balance(type: $type) {\n          ...Balance\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nfragment Balance on Balance {\n  quantity\n  securityId\n  __typename\n}",
-        "FetchSecurityMarketData": "query FetchSecurityMarketData($id: ID!) {\n  security(id: $id) {\n    id\n    ...SecurityMarketData\n    __typename\n  }\n}\n\nfragment SecurityMarketData on Security {\n  id\n  allowedOrderSubtypes\n  marginRates {\n    ...ClientMarginRates\n    __typename\n  }\n  managementExpenseRatio\n  fundamentals {\n    ...Fundamentals\n    __typename\n  }\n  stock {\n    ...Stock\n    __typename\n  }\n  __typename\n}\n\nfragment Fundamentals on Fundamentals {\n  avgVolume\n  beta\n  circulatingSupply\n  companyCash\n  companyCeo\n  companyDebt\n  companyEarningsGrowth\n  companyGrossProfitMargin\n  companyHqLocation\n  companyRevenue\n  currency\n  dailyVolume\n  description\n  eps\n  high52Week\n  inceptionYear\n  low52Week\n  marketCap\n  numberOfEmployees\n  peRatio\n  sharesOutstanding\n  totalAssets\n  totalSupply\n  yield\n  __typename\n}\n\nfragment Stock on Stock {\n  description\n  dividendFrequency\n  ipoState\n  leverageRatio\n  name\n  primaryExchange\n  primaryMic\n  segmentMic\n  symbol\n  usPtp\n  __typename\n}\n\nfragment ClientMarginRates on MarginRates {\n  clientMarginRate\n  __typename\n}",
-        "FetchFundsTransfer": "query FetchFundsTransfer($id: ID!) {\n  fundsTransfer: funds_transfer(id: $id, include_cancelled: true) {\n    ...FundsTransfer\n    __typename\n  }\n}\n\nfragment FundsTransfer on FundsTransfer {\n  id\n  status\n  cancellable\n  rejectReason: reject_reason\n  schedule {\n    id\n    __typename\n  }\n  source {\n    ...BankAccountOwner\n    __typename\n  }\n  destination {\n    ...BankAccountOwner\n    __typename\n  }\n  __typename\n}\n\nfragment BankAccountOwner on BankAccountOwner {\n  bankAccount: bank_account {\n    ...BankAccount\n    __typename\n  }\n  __typename\n}\n\nfragment BankAccount on BankAccount {\n  id\n  accountName: account_name\n  corporate\n  createdAt: created_at\n  currency\n  institutionName: institution_name\n  jurisdiction\n  nickname\n  type\n  updatedAt: updated_at\n  verificationDocuments: verification_documents {\n    ...BankVerificationDocument\n    __typename\n  }\n  verifications {\n    ...BankAccountVerification\n    __typename\n  }\n  ...CaBankAccount\n  ...UsBankAccount\n  __typename\n}\n\nfragment CaBankAccount on CaBankAccount {\n  accountName: account_name\n  accountNumber: account_number\n  __typename\n}\n\nfragment UsBankAccount on UsBankAccount {\n  accountName: account_name\n  accountNumber: account_number\n  __typename\n}\n\nfragment BankVerificationDocument on VerificationDocument {\n  id\n  acceptable\n  updatedAt: updated_at\n  createdAt: created_at\n  documentId: document_id\n  documentType: document_type\n  rejectReason: reject_reason\n  reviewedAt: reviewed_at\n  reviewedBy: reviewed_by\n  __typename\n}\n\nfragment BankAccountVerification on BankAccountVerification {\n  custodianProcessedAt: custodian_processed_at\n  custodianStatus: custodian_status\n  document {\n    ...BankVerificationDocument\n    __typename\n  }\n  __typename\n}",
-        "FetchInstitutionalTransfer": "query FetchInstitutionalTransfer($id: ID!) {\n  accountTransfer(id: $id) {\n    ...InstitutionalTransfer\n    __typename\n  }\n}\n\nfragment InstitutionalTransfer on InstitutionalTransfer {\n  id\n  accountId: account_id\n  state\n  documentId: document_id\n  documentType: document_type\n  expectedCompletionDate: expected_completion_date\n  timelineExpectation: timeline_expectation {\n    lowerBound: lower_bound\n    upperBound: upper_bound\n    __typename\n  }\n  estimatedCompletionMaximum: estimated_completion_maximum\n  estimatedCompletionMinimum: estimated_completion_minimum\n  institutionName: institution_name\n  transferStatus: external_state\n  redactedInstitutionAccountNumber: redacted_institution_account_number\n  expectedValue: expected_value\n  transferType: transfer_type\n  cancellable\n  pdfUrl: pdf_url\n  clientVisibleState: client_visible_state\n  shortStatusDescription: short_status_description\n  longStatusDescription: long_status_description\n  progressPercentage: progress_percentage\n  type\n  rolloverType: rollover_type\n  autoSignatureEligible: auto_signature_eligible\n  parentInstitution: parent_institution {\n    id\n    name\n    __typename\n  }\n  stateHistories: state_histories {\n    id\n    state\n    notes\n    transitionSubmittedBy: transition_submitted_by\n    transitionedAt: transitioned_at\n    transitionCode: transition_code\n    __typename\n  }\n  transferFeeReimbursement: transfer_fee_reimbursement {\n    id\n    feeAmount: fee_amount\n    __typename\n  }\n  docusignSentViaEmail: docusign_sent_via_email\n  clientAccountType: client_account_type\n  primaryClientIdentityId: primary_client_identity_id\n  primaryOwnerSigned: primary_owner_signed\n  secondaryOwnerSigned: secondary_owner_signed\n  __typename\n}",
-        "FetchAccountHistoricalFinancials": "query FetchAccountHistoricalFinancials($id: ID!, $currency: Currency!, $startDate: Date, $resolution: DateResolution!, $endDate: Date, $first: Int, $cursor: String) {\n          account(id: $id) {\n            id\n            financials {\n              historicalDaily(\n                currency: $currency\n                startDate: $startDate\n                resolution: $resolution\n                endDate: $endDate\n                first: $first\n                after: $cursor\n              ) {\n                edges {\n                  node {\n                    ...AccountHistoricalFinancials\n                    __typename\n                  }\n                  __typename\n                }\n                pageInfo {\n                  hasNextPage\n                  endCursor\n                  __typename\n                }\n                __typename\n              }\n              __typename\n            }\n            __typename\n          }\n        }\n\n        fragment AccountHistoricalFinancials on AccountHistoricalDailyFinancials {\n          date\n          netLiquidationValueV2 {\n            ...Money\n            __typename\n          }\n          netDepositsV2 {\n            ...Money\n            __typename\n          }\n          __typename\n        }\n\n        fragment Money on Money {\n          amount\n          cents\n          currency\n          __typename\n        }",
-        "FetchIdentityHistoricalFinancials": "query FetchIdentityHistoricalFinancials($identityId: ID!, $currency: Currency!, $startDate: Date, $endDate: Date, $first: Int, $cursor: String, $accountIds: [ID!]) {\n      identity(id: $identityId) {\n        id\n        financials(filter: {accounts: $accountIds}) {\n          historicalDaily(\n            currency: $currency\n            startDate: $startDate\n            endDate: $endDate\n            first: $first\n            after: $cursor\n          ) {\n            edges {\n              node {\n                ...IdentityHistoricalFinancials\n                __typename\n              }\n              __typename\n            }\n            pageInfo {\n              hasNextPage\n              endCursor\n              __typename\n            }\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n    }\n\n    fragment IdentityHistoricalFinancials on IdentityHistoricalDailyFinancials {\n      date\n      netLiquidationValueV2 {\n        amount\n        currency\n        __typename\n      }\n      netDepositsV2 {\n        amount\n        currency\n        __typename\n      }\n      __typename\n    }",
-        "FetchCorporateActionChildActivities": "query FetchCorporateActionChildActivities($activityCanonicalId: String!) {\n  corporateActionChildActivities(\n    condition: {activityCanonicalId: $activityCanonicalId}\n  ) {\n    nodes {\n      ...CorporateActionChildActivity\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment CorporateActionChildActivity on CorporateActionChildActivity {\n  canonicalId\n  activityCanonicalId\n  assetName\n  assetSymbol\n  assetType\n  entitlementType\n  quantity\n  currency\n  price\n  recordDate\n  __typename\n}",
-        "FetchBrokerageMonthlyStatementTransactions": "query FetchBrokerageMonthlyStatementTransactions($period: String!, $accountId: String!) {\n  brokerageMonthlyStatements(period: $period, accountId: $accountId) {\n    id\n    statementType\n    createdAt\n    data {\n      ... on BrokerageMonthlyStatementObject {\n        ...BrokerageMonthlyStatementObject\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment BrokerageMonthlyStatementObject on BrokerageMonthlyStatementObject {\n  custodianAccountId\n  activitiesPerCurrency {\n    currency\n    currentTransactions {\n      ...BrokerageMonthlyStatementTransactions\n      __typename\n    }\n    __typename\n  }\n  currentTransactions {\n    ...BrokerageMonthlyStatementTransactions\n    __typename\n  }\n  isMultiCurrency\n  __typename\n}\n\nfragment BrokerageMonthlyStatementTransactions on BrokerageMonthlyStatementTransactions {\n  balance\n  cashMovement\n  unit\n  description\n  transactionDate\n  transactionType\n  __typename\n}",
-        "FetchIdentityPositions": "query FetchIdentityPositions($identityId: ID!, $currency: Currency!, $first: Int, $cursor: String, $accountIds: [ID!], $aggregated: Boolean, $currencyOverride: CurrencyOverride, $sort: PositionSort, $sortDirection: PositionSortDirection, $filter: PositionFilter, $since: PointInTime, $includeSecurity: Boolean = false, $includeAccountData: Boolean = false, $includeOneDayReturnsBaseline: Boolean = false) {\n  identity(id: $identityId) {\n    id\n    financials(filter: {accounts: $accountIds}) {\n      current(currency: $currency) {\n        id\n        positions(\n          first: $first\n          after: $cursor\n          aggregated: $aggregated\n          filter: $filter\n          sort: $sort\n          sortDirection: $sortDirection\n        ) {\n          edges {\n            node {\n              ...PositionV2\n              __typename\n            }\n            __typename\n          }\n          pageInfo {\n            hasNextPage\n            endCursor\n            __typename\n          }\n          totalCount\n          status\n          hasOptionsPosition\n          hasCryptoPositionsOnly\n          securityTypes\n          securityCurrencies\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment SecuritySummary on Security {\n  ...SecuritySummaryDetails\n  stock {\n    ...StockSummary\n    __typename\n  }\n  quoteV2(currency: null) {\n    ...SecurityQuoteV2\n    __typename\n  }\n  optionDetails {\n    ...OptionSummary\n    __typename\n  }\n  __typename\n}\n\nfragment SecuritySummaryDetails on Security {\n  id\n  currency\n  inactiveDate\n  status\n  wsTradeEligible\n  equityTradingSessionType\n  securityType\n  active\n  securityGroups {\n    id\n    name\n    __typename\n  }\n  features\n  logoUrl\n  __typename\n}\n\nfragment StockSummary on Stock {\n  name\n  symbol\n  primaryMic\n  primaryExchange\n  __typename\n}\n\nfragment StreamedSecurityQuoteV2 on UnifiedQuote {\n  __typename\n  securityId\n  ask\n  bid\n  currency\n  price\n  sessionPrice\n  quotedAsOf\n  ... on EquityQuote {\n    marketStatus\n    askSize\n    bidSize\n    close\n    high\n    last\n    lastSize\n    low\n    open\n    mid\n    volume: vol\n    referenceClose\n    __typename\n  }\n  ... on OptionQuote {\n    marketStatus\n    askSize\n    bidSize\n    close\n    high\n    last\n    lastSize\n    low\n    open\n    mid\n    volume: vol\n    breakEven\n    inTheMoney\n    liquidityStatus\n    openInterest\n    underlyingSpot\n    __typename\n  }\n}\n\nfragment SecurityQuoteV2 on UnifiedQuote {\n  ...StreamedSecurityQuoteV2\n  previousBaseline\n  __typename\n}\n\nfragment OptionSummary on Option {\n  underlyingSecurity {\n    ...UnderlyingSecuritySummary\n    __typename\n  }\n  maturity\n  osiSymbol\n  expiryDate\n  multiplier\n  optionType\n  strikePrice\n  __typename\n}\n\nfragment UnderlyingSecuritySummary on Security {\n  id\n  stock {\n    name\n    primaryExchange\n    primaryMic\n    symbol\n    __typename\n  }\n  __typename\n}\n\nfragment PositionLeg on PositionLeg {\n  security {\n    id\n    ...SecuritySummary @include(if: $includeSecurity)\n    __typename\n  }\n  quantity\n  positionDirection\n  bookValue {\n    amount\n    currency\n    __typename\n  }\n  totalValue(currencyOverride: $currencyOverride) {\n    amount\n    currency\n    __typename\n  }\n  averagePrice {\n    amount\n    currency\n    __typename\n  }\n  percentageOfAccount\n  unrealizedReturns(since: $since) {\n    amount\n    currency\n    __typename\n  }\n  marketAveragePrice: averagePrice(currencyOverride: $currencyOverride) {\n    amount\n    currency\n    __typename\n  }\n  marketBookValue: bookValue(currencyOverride: $currencyOverride) {\n    amount\n    currency\n    __typename\n  }\n  marketUnrealizedReturns: unrealizedReturns(currencyOverride: $currencyOverride) {\n    amount\n    currency\n    __typename\n  }\n  oneDayReturnsBaselineV2(currencyOverride: $currencyOverride) @include(if: $includeOneDayReturnsBaseline) {\n    baseline {\n      currency\n      amount\n      __typename\n    }\n    useDailyPriceChange\n    __typename\n  }\n  __typename\n}\n\nfragment PositionV2 on PositionV2 {\n  id\n  quantity\n  accounts @include(if: $includeAccountData) {\n    id\n    __typename\n  }\n  percentageOfAccount\n  positionDirection\n  bookValue {\n    amount\n    currency\n    __typename\n  }\n  averagePrice {\n    amount\n    currency\n    __typename\n  }\n  marketAveragePrice: averagePrice(currencyOverride: $currencyOverride) {\n    amount\n    currency\n    __typename\n  }\n  marketBookValue: bookValue(currencyOverride: $currencyOverride) {\n    amount\n    currency\n    __typename\n  }\n  totalValue(currencyOverride: $currencyOverride) {\n    amount\n    currency\n    __typename\n  }\n  unrealizedReturns(since: $since) {\n    amount\n    currency\n    __typename\n  }\n  marketUnrealizedReturns: unrealizedReturns(currencyOverride: $currencyOverride) {\n    amount\n    currency\n    __typename\n  }\n  security {\n    id\n    ...SecuritySummary @include(if: $includeSecurity)\n    __typename\n  }\n  oneDayReturnsBaselineV2(currencyOverride: $currencyOverride) @include(if: $includeOneDayReturnsBaseline) {\n    baseline {\n      currency\n      amount\n      __typename\n    }\n    useDailyPriceChange\n    __typename\n  }\n  strategyType\n  legs {\n    ...PositionLeg\n    __typename\n  }\n  __typename\n}",
-        "FetchCreditCardAccount": "query FetchCreditCardAccount($id: ID!) {\n  creditCardAccount(id: $id) {\n    ...CreditCardAccount\n    __typename\n  }\n}\n\nfragment CreditCardAccount on CreditCardAccount {\n  id\n  creditLimit\n  upgradesInProgress\n  balance {\n    current\n    outstanding\n    availableCreditLimit\n    pending\n    __typename\n  }\n  cardProductId\n  statementDayOfMonth\n  actions\n  currentCards {\n    id\n    actions\n    cardNumber\n    cardStatus\n    cardVariant\n    isLocked\n    isPhysicalCardActivated\n    isSupplementaryCard\n    nameOnCard\n    __typename\n  }\n  cards {\n    id\n    cardNumber\n    adminActions\n    lastPinCounterResetAt\n    isBlocked\n    isPhysicalCardActivated\n    __typename\n  }\n  preferences {\n    cardRewardRedemptionType\n    __typename\n  }\n  __typename\n}",
-    }
 
     def __init__(self, sess: WSAPISession | None = None):
         self.security_market_data_cache_getter = None
@@ -311,7 +279,7 @@ class WealthsimpleAPIBase:
     ):
         query = {
             "operationName": query_name,
-            "query": self.GRAPHQL_QUERIES[query_name],
+            "query": GRAPHQL_QUERIES[query_name],
             "variables": variables,
         }
 
@@ -453,45 +421,9 @@ class WealthsimpleAPI(WealthsimpleAPIBase):
                 load_all_pages=True,
             )
             for account in accounts:
-                self._account_add_description(account)
+                format_account_description(account)
             self.account_cache[cache_key] = accounts
         return self.account_cache[cache_key]
-
-    @staticmethod
-    def _account_add_description(account):
-        account["number"] = account["id"]
-        # This is the account number visible in the WS app:
-        for ca in account["custodianAccounts"]:
-            if ca["branch"] in ("WS", "TR") and ca["status"] == "open":
-                account["number"] = ca["id"]
-
-        if account.get("nickname"):
-            account["description"] = account["nickname"]
-            return
-
-        account_type = account["unifiedAccountType"]
-
-        # Special case: CASH depends on owner configuration
-        if account_type == "CASH":
-            account["description"] = (
-                "Cash: joint"
-                if account["accountOwnerConfiguration"] == "MULTI_OWNER"
-                else "Cash"
-            )
-        # Special case: MANAGED_NON_REGISTERED depends on features
-        elif account_type == "MANAGED_NON_REGISTERED":
-            features = {f["name"] for f in account["accountFeatures"]}
-            if "PRIVATE_CREDIT" in features:
-                account["description"] = "Non-registered: managed - private credit"
-            elif "PRIVATE_EQUITY" in features:
-                account["description"] = "Non-registered: managed - private equity"
-            else:
-                account["description"] = account_type
-        # Simple lookup for all other types
-        else:
-            account["description"] = _ACCOUNT_TYPE_DESCRIPTIONS.get(
-                account_type, account_type
-            )
 
     def get_account_balances(self, account_id):
         accounts = self.do_graphql_query(
@@ -644,245 +576,9 @@ class WealthsimpleAPI(WealthsimpleAPIBase):
                 activities,
             )
         for act in activities:
-            self._activity_add_description(act)
+            format_activity_description(act, self)
 
         return activities
-
-    def _activity_add_description(self, act):
-        act["description"] = f"{act['type']}: {act['subType']}"
-
-        if act["type"] == "INTERNAL_TRANSFER" or act["type"] == "ASSET_MOVEMENT":
-            accounts = self.get_accounts(False)
-            matching = [
-                acc for acc in accounts if acc["id"] == act["opposingAccountId"]
-            ]
-            target_account = matching.pop() if matching else None
-            account_description = (
-                f"{target_account['description']} ({target_account['number']})"
-                if target_account
-                else act["opposingAccountId"]
-            )
-            direction = "to" if act["subType"] == "SOURCE" else "from"
-            act["description"] = (
-                f"Money transfer: {direction} Wealthsimple {account_description}"
-            )
-
-        elif act["type"] in ["DIY_BUY", "DIY_SELL", "MANAGED_BUY", "MANAGED_SELL"]:
-            if "MANAGED" in act["type"]:
-                verb = "Managed transaction"
-            else:
-                verb = act["subType"].replace("_", " ").capitalize()
-            action = (
-                "buy"
-                if act["type"] == "DIY_BUY" or act["type"] == "MANAGED_BUY"
-                else "sell"
-            )
-            security = self.security_id_to_symbol(act["securityId"])
-            if act["assetQuantity"] is None:
-                act["description"] = f"{verb}: {action} TBD"
-            else:
-                act["description"] = (
-                    f"{verb}: {action} {float(act['assetQuantity'])} x "
-                    f"{security} @ {float(act['amount']) / float(act['assetQuantity'])}"
-                )
-
-        elif act["type"] == "CORPORATE_ACTION" and act["subType"] == "SUBDIVISION":
-            child_activities = self.get_corporate_action_child_activities(
-                act["canonicalId"]
-            )
-            held_activity = next(
-                (
-                    activity
-                    for activity in child_activities
-                    if activity["entitlementType"] == "HOLD"
-                ),
-                None,
-            )
-            receive_activity = next(
-                (
-                    activity
-                    for activity in child_activities
-                    if activity["entitlementType"] == "RECEIVE"
-                ),
-                None,
-            )
-            if held_activity and receive_activity:
-                held_shares: float = float(held_activity["quantity"])
-                received_shares: float = float(receive_activity["quantity"])
-                total_shares: float = held_shares + received_shares
-                act["description"] = (
-                    f"Subdivision: {held_shares} -> {total_shares} shares of {act['assetSymbol']}"
-                )
-            else:
-                received_shares: float = float(act["amount"])
-                act["description"] = (
-                    f"Subdivision: Received {received_shares} new shares of {act['assetSymbol']}"
-                )
-
-            if act["currency"] is None:
-                security = self.get_security_market_data(act["securityId"])
-                if security and isinstance(security, dict):
-                    fundamentals = security.get("fundamentals")
-                    if fundamentals and isinstance(fundamentals, dict):
-                        act["currency"] = fundamentals.get("currency")
-
-        elif act["type"] in ["DEPOSIT", "WITHDRAWAL"] and act["subType"] in [
-            "E_TRANSFER",
-            "E_TRANSFER_FUNDING",
-        ]:
-            direction = "from" if act["type"] == "DEPOSIT" else "to"
-            act["description"] = (
-                f"Deposit: Interac e-transfer {direction} {act['eTransferName']} {act['eTransferEmail']}"
-            )
-
-        elif act["type"] == "DEPOSIT" and act["subType"] == "PAYMENT_CARD_TRANSACTION":
-            type_ = act["type"].lower().capitalize()
-            act["description"] = f"{type_}: Debit card funding"
-
-        elif act["subType"] == "EFT":
-            details = self.get_etf_details(act["externalCanonicalId"])
-            type_ = act["type"].lower().capitalize()
-            direction = "from" if act["type"] == "DEPOSIT" else "to"
-            prop = "source" if act["type"] == "DEPOSIT" else "destination"
-            if isinstance(details, dict):
-                bank_account_info = details.get(prop, {})
-            if isinstance(bank_account_info, dict):
-                bank_account = bank_account_info.get("bankAccount", {})
-                nickname = bank_account.get("nickname")
-                account_number = bank_account.get("accountNumber")
-            if not nickname:
-                nickname = bank_account.get("accountName")
-            act["description"] = f"{type_}: EFT {direction} {nickname} {account_number}"
-
-        elif act["type"] == "REFUND" and act["subType"] == "TRANSFER_FEE_REFUND":
-            act["description"] = "Reimbursement: account transfer fee"
-
-        elif (
-            act["type"] == "INSTITUTIONAL_TRANSFER_INTENT"
-            and act["subType"] == "TRANSFER_IN"
-        ):
-            details = self.get_transfer_details(act["externalCanonicalId"])
-            if isinstance(details, dict):
-                verb = details["transferType"].replace("_", "-").capitalize()
-                client_account_type = details["clientAccountType"].upper()
-                institution_name = details["institutionName"]
-                redacted_account_number = details["redactedInstitutionAccountNumber"]
-            act["description"] = (
-                f"Institutional transfer: {verb} {client_account_type} "
-                f"account transfer from {institution_name} "
-                f"****{redacted_account_number}"
-            )
-        elif (
-            act["type"] == "INSTITUTIONAL_TRANSFER_INTENT"
-            and act["subType"] == "TRANSFER_OUT"
-        ):
-            act["description"] = (
-                f"Institutional transfer: transfer to {act['institutionName']}"
-            )
-        elif act["type"] == "INTEREST":
-            if act["subType"] == "FPL_INTEREST":
-                act["description"] = "Stock Lending Earnings"
-            else:
-                act["description"] = "Interest"
-
-        elif act["type"] == "DIVIDEND":
-            security = self.security_id_to_symbol(act["securityId"])
-            act["description"] = f"Dividend: {security}"
-
-        elif act["type"] == "FUNDS_CONVERSION":
-            act["description"] = (
-                f"Funds converted: {act['currency']} from {'USD' if act['currency'] == 'CAD' else 'CAD'}"
-            )
-
-        elif act["type"] == "NON_RESIDENT_TAX":
-            act["description"] = "Non-resident tax"
-
-        # Refs:
-        #   https://www.payments.ca/payment-resources/iso-20022/automatic-funds-transfer
-        #   https://www.payments.ca/compelling-new-evidence-strong-link-between-aft-and-canadas-cheque-decline
-        # 2nd ref states: "AFTs are electronic direct credit or direct debit transactions, commonly known in Canada as direct deposits or pre-authorized debits (PADs)."
-        elif act["type"] in ("DEPOSIT", "WITHDRAWAL") and act["subType"] == "AFT":
-            type_ = (
-                "Direct deposit" if act["type"] == "DEPOSIT" else "Pre-authorized debit"
-            )
-            direction = "from" if type_ == "Direct deposit" else "to"
-            institution = (
-                act["aftOriginatorName"]
-                if act["aftOriginatorName"]
-                else act["externalCanonicalId"]
-            )
-            act["description"] = f"{type_}: {direction} {institution}"
-
-        elif act["type"] == "WITHDRAWAL" and act["subType"] == "BILL_PAY":
-            type_ = act["type"].capitalize()
-            name = act["billPayPayeeNickname"]
-            if not name:
-                name = act["billPayCompanyName"]
-            number = act["redactedExternalAccountNumber"]
-            act["description"] = f"{type_}: Bill pay {name} {number}"
-
-        elif act["type"] == "P2P_PAYMENT" and act["subType"] in (
-            "SEND",
-            "SEND_RECEIVED",
-        ):
-            direction = "sent to" if act["subType"] == "SEND" else "received from"
-            p2p_handle = act["p2pHandle"]
-            act["description"] = f"Cash {direction} {p2p_handle}"
-
-        elif act["type"] == "PROMOTION" and act["subType"] == "INCENTIVE_BONUS":
-            type_ = act["type"].capitalize()
-            subtype = act["subType"].replace("_", " ").capitalize()
-            act["description"] = f"{type_}: {subtype}"
-
-        elif act["type"] == "REFERRAL" and act["subType"] is None:
-            type_ = act["type"].capitalize()
-            act["description"] = f"{type_}"
-
-        elif act["type"] == "CREDIT_CARD" and act["subType"] == "PURCHASE":
-            merchant = act["spendMerchant"]
-            status = (
-                "(Pending) " if act["status"] == "authorized" else ""
-            )  # Posted purchase transactions have status = settled
-            act["description"] = f"{status}Credit card purchase: {merchant}"
-
-        elif act["type"] == "CREDIT_CARD" and act["subType"] == "HOLD":
-            merchant = act["spendMerchant"]
-            status = (
-                "(Pending) " if act["status"] == "authorized" else ""
-            )  # Posted return transactions have subType = REFUND and status = settled
-            act["description"] = f"{status}Credit card refund: {merchant}"
-
-        elif act["type"] == "CREDIT_CARD" and act["subType"] == "REFUND":
-            merchant = act["spendMerchant"]
-            act["description"] = f"Credit card refund: {merchant}"
-
-        elif (act["type"] == "CREDIT_CARD" and act["subType"] == "PAYMENT") or act[
-            "type"
-        ] == "CREDIT_CARD_PAYMENT":
-            act["description"] = "Credit card payment"
-
-        elif act["type"] == "REIMBURSEMENT" and act["subType"] == "CASHBACK":
-            program = (
-                "- Visa Infinite"
-                if act["rewardProgram"] == "CREDIT_CARD_VISA_INFINITE_REWARDS"
-                else ""
-            )
-            act["description"] = f"Cash back {program}".rstrip()
-
-        elif act["type"] == "SPEND" and act["subType"] == "PREPAID":
-            merchant = act["spendMerchant"]
-            act["description"] = f"Purchase: {merchant}"
-
-        elif act["type"] == "INTEREST_CHARGE":
-            if act["subType"] == "MARGIN_INTEREST":
-                act["description"] = "Interest Charge: margin interest"
-            else:
-                act["description"] = "Interest Charge"
-
-        elif act["type"] == "FEE" and act["subType"] == "MANAGEMENT_FEE":
-            act["description"] = "Management fee"
-
-        # TODO: Add other types as needed
 
     def security_id_to_symbol(self, security_id: str) -> str:
         security_symbol = f"[{security_id}]"
