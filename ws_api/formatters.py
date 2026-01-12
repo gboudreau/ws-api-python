@@ -5,6 +5,7 @@ _ACCOUNT_TYPE_DESCRIPTIONS = {
     "SELF_DIRECTED_RRSP": "RRSP: self-directed",
     "MANAGED_RRSP": "RRSP: managed",
     "SELF_DIRECTED_SPOUSAL_RRSP": "RRSP: self-directed spousal",
+    "MANAGED_SPOUSAL_RRSP": "RRSP: managed spousal",
     "SELF_DIRECTED_TFSA": "TFSA: self-directed",
     "MANAGED_TFSA": "TFSA: managed",
     "SELF_DIRECTED_FHSA": "FHSA: self-directed",
@@ -18,6 +19,8 @@ _ACCOUNT_TYPE_DESCRIPTIONS = {
     "SELF_DIRECTED_SPOUSAL_RRIF": "RRIF: self-directed spousal",
     "CREDIT_CARD": "Credit card",
     "SELF_DIRECTED_LIRA": "LIRA: self-directed",
+    "MANAGED_LIRA": "LIRA: managed",
+    "MANAGED_FIXED_INCOME_NON_REGISTERED": "Income Portfolio: managed",
 }
 
 
