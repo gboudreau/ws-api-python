@@ -21,6 +21,7 @@ _ACCOUNT_TYPE_DESCRIPTIONS = {
     "SELF_DIRECTED_LIRA": "LIRA: self-directed",
     "MANAGED_LIRA": "LIRA: managed",
     "MANAGED_FIXED_INCOME_NON_REGISTERED": "Income Portfolio: managed",
+    "PORTFOLIO_LINE_OF_CREDIT": "Portfolio line of credit",
 }
 
 
