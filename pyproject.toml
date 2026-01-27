@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ws-api"
-version = "0.30.1"
+version = "0.31.0"
 description = "Access your Wealthsimple account using their (GraphQL) API."
 readme = "README.md"
 license = {file = "LICENSE"}
