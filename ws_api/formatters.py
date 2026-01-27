@@ -240,7 +240,7 @@ def format_activity_description(act: dict, api_context) -> None:
         security = api_context.security_id_to_symbol(act["securityId"])
         act["description"] = f"Crypto {action}: {float(act['assetQuantity'])} x {security}"
 
-    if act["type"] == "CRYPTO_TRANSFER":
+    elif act["type"] == "CRYPTO_TRANSFER":
         action = "sent" if act["subType"] == "TRANSFER_OUT" else "received"
         security = api_context.security_id_to_symbol(act["securityId"])
         act["description"] = (
