@@ -64,7 +64,7 @@ class WSApiTest:
 
         # If you want, you can set a custom User-Agent for the requests to the WealthSimple API:
         WealthsimpleAPI.set_user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36")
-    
+
         # 2. If it's the first time you run this, create a new session using the username & password (and TOTP answer, if needed). Do NOT save those infos in your code!
         username = input("Wealthsimple username (email): ")
         session = keyring.get_password(f"{keyring_service_name}.{username}", "session")
@@ -106,7 +106,7 @@ class WSApiTest:
                     password = None
             # Use the new session object to instantiate the API object
             ws = WealthsimpleAPI.from_token(session, persist_session_fct, username)
-        
+
         # Optionally define functions to cache market data, if you want transactions' descriptions and accounts balances to show the security's symbol instead of its ID
         # eg. sec-s-e7947deb977341ff9f0ddcf13703e9a6 => TSX:XEQT
         def sec_info_getter_fn(ws_security_id: str):
@@ -120,7 +120,7 @@ class WSApiTest:
             json.dump(market_data, open(cache_file_path, 'w'))
             return market_data
         ws.set_security_market_data_cache(sec_info_getter_fn, sec_info_setter_fn)
-        
+
         # 4. Use the API object to access your WS accounts
         accounts = ws.get_accounts()
 
@@ -131,7 +131,7 @@ class WSApiTest:
             deposits = float(hf['netDepositsV2']['amount'])
             gains = value - deposits
             print(f"  - {hf['date']} = ${value:,.0f} - {deposits:,.0f} (deposits) = {gains:,.0f} (gains)")
-        
+
         for account in accounts:
             print(f"Account: {account['description']} ({account['number']})")
             if account['description'] == account['unifiedAccountType']:
@@ -145,31 +145,31 @@ class WSApiTest:
             else:
                 if account['currency'] == 'CAD':
                     value = account['financials']['currentCombined']['netLiquidationValue']['amount']
-                    print(f"  Net worth: {value} {account['currency']}")    
+                    print(f"  Net worth: {value} {account['currency']}")
                 # Note: For USD accounts, value is the CAD value converted to USD
                 # For USD accounts, only the balance & positions are relevant
-        
+
                 # Cash and positions balances
                 balances = ws.get_account_balances(account['id'])
                 for cash_balance_key in [ 'sec-c-usd', 'sec-c-cad']:
                     cash_balance = float(balances.get(cash_balance_key, 0))
                     print(f"  Available (cash) balance: {cash_balance} {cash_balance_key.split('-')[-1].upper()}")
-        
+
                 if len(balances) > 1:
                     print("  Assets:")
                     for security, bal in balances.items():
                         if security in ['sec-c-cad', 'sec-c-usd']:
                             continue
                         print(f"  - {security} x {bal}")
-        
+
             print("  Historical Value & Gains:")
-            historical_fins = ws.get_account_historical_financials(account['id'], account['currency'])            
+            historical_fins = ws.get_account_historical_financials(account['id'], account['currency'])
             for hf in historical_fins:
                 value = hf['netLiquidationValueV2']['cents'] / 100
                 deposits = hf['netDepositsV2']['cents'] / 100
                 gains = value - deposits
                 print(f"  - {hf['date']} = ${value:,.0f} - {deposits:,.0f} (deposits) = {gains:,.0f} (gains)")
-            
+
             # Fetch activities (transactions)
             acts = ws.get_activities(account['id'])
             if acts:
@@ -179,7 +179,7 @@ class WSApiTest:
                 for act in acts:
                     if act['type'] == 'DIY_BUY':
                         act['amountSign'] = 'negative'
-        
+
                     # Print transaction details
                     print(
                         f"  - [{datetime.strptime(act['occurredAt'].replace(':', ''), '%Y-%m-%dT%H%M%S.%f%z')}] [{act['canonicalId']}] {act['description']} "
@@ -188,7 +188,7 @@ class WSApiTest:
                     if act['description'] == f"{act['type']}: {act['subType']}":
                         # This is an "unknown" transaction, for which description is generic; please open an issue on https://github.com/gboudreau/ws-api-python/issues and include the following:
                         print(f"    Unknown activity: {act}")
-    
+
             print()
 
 if __name__ == "__main__":
