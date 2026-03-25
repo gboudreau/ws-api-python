@@ -22,7 +22,7 @@ class WSApiTest:
         if session:
             try:
                 # 3a. Use the save session to instantiate the API object
-                ws = WealthsimpleAPI.from_token(session, persist_session_fct, username)
+                ws = WealthsimpleAPI.from_token(WSAPISession.from_json(session), persist_session_fct, username)
                 # persist_session_fct is needed here, because the session may be updated if the access token expired, and thus this function will be called to save the new session
             except Exception as e:
                 print(f"Error trying to use stored tokens: {e}")
@@ -62,12 +62,13 @@ class WSApiTest:
         def sec_info_getter_fn(ws_security_id: str):
             cache_file_path = os.path.join(tempfile.gettempdir(), f"ws-api-{ws_security_id}.json")
             if os.path.exists(cache_file_path):
-                return json.load(open(cache_file_path, 'r'))
+                with open(cache_file_path, 'r') as f:
+                    return json.load(f)
             return None
         def sec_info_setter_fn(ws_security_id: str, market_data: object):
             cache_file_path = os.path.join(tempfile.gettempdir(), f"ws-api-{ws_security_id}.json")
-            # noinspection PyTypeChecker
-            json.dump(market_data, open(cache_file_path, 'w'))
+            with open(cache_file_path, 'w') as f:
+                json.dump(market_data, f)
             return market_data
         ws.set_security_market_data_cache(sec_info_getter_fn, sec_info_setter_fn)
 
