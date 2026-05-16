@@ -149,7 +149,7 @@ class WealthsimpleAPIBase:
 
             # Look for clientId in the app JS file
             match = re.search(
-                r'production.*clientId:"([a-f0-9]+)"', response, re.IGNORECASE
+                r'"production"[^}]*clientId:"([a-f0-9]+)"', response, re.IGNORECASE
             )
             if match:
                 self.session.client_id = match.group(1)
