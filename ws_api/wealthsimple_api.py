@@ -637,7 +637,11 @@ class WealthsimpleAPI(WealthsimpleAPIBase):
         return value
 
     def get_security_historical_quotes(self, security_id, time_range="1m"):
-        # Fetch historical quotes for a security using GraphQL query
+        """Fetch historical quotes for a security using GraphQL query.
+
+        Deprecated:
+            Use `get_security_chart_quotes` instead.
+        """
         return self.do_graphql_query(
             "FetchSecurityHistoricalQuotes",
             {
@@ -645,6 +649,34 @@ class WealthsimpleAPI(WealthsimpleAPIBase):
                 "timerange": time_range,
             },
             "security.historicalQuotes",
+            "array",
+        )
+
+    def get_security_chart_quotes(
+        self,
+        security_id: str,
+        period: str = "ONE_MONTH",
+        trading_session: str = "OVERNIGHT",
+    ):
+        """Get historical quotes for a security.
+
+        Args:
+            security_id: Wealthsimple security ID, from search_security() response.
+            period: Chart period, e.g. ONE_DAY, FIVE_DAYS, ONE_MONTH, THREE_MONTHS,
+                YEAR_TO_DATE, ONE_YEAR, FIVE_YEARS, etc.
+            trading_session: Trading session, e.g. OVERNIGHT.
+
+        Returns:
+            list[Any]: A list of chart bar quote objects.
+        """
+        return self.do_graphql_query(
+            "FetchIntraDayChartQuotes",
+            {
+                "id": security_id,
+                "period": period,
+                "tradingSession": trading_session,
+            },
+            "security.chartBarQuotes",
             "array",
         )
 
