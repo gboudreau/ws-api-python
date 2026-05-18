@@ -176,7 +176,8 @@ class WealthsimpleAPIBase:
             try:
                 self.search_security("XEQT")
             except WSApiException as e:
-                if e.response is None or e.response.get("message") != "Not Authorized.":
+                is_not_authorized = e.response is not None and (e.response.get("message") == "Not Authorized." or ('errors' in e.response and e.response.get('errors')[0].get("message") == "Not Authorized."))
+                if not is_not_authorized:
                     raise
                 # Access token expired; try to refresh it below
             else:
