@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from inspect import signature
 from typing import Any
 
-import requests
+from curl_cffi import requests
 
 from ws_api.exceptions import (
     CurlException,
@@ -44,88 +44,43 @@ class WealthsimpleAPIBase:
     def uuidv4() -> str:
         return str(uuid.uuid4())
 
-    def send_http_request(
-        self,
-        url: str,
-        method: str = "POST",
-        data: dict | None = None,
-        headers: dict | None = None,
-        return_headers: bool = False,
-        return_response: bool = False,
-    ) -> Any:
-        headers = headers or {}
+    def _build_headers(
+        self, method: str, data: dict | None, extra: dict | None
+    ) -> dict:
+        headers = extra or {}
         if method == "POST":
             headers["Content-Type"] = "application/json"
-
         if self.session.session_id:
             headers["x-ws-session-id"] = self.session.session_id
-
         if self.session.access_token and (
             not data or data.get("grant_type") != "refresh_token"
         ):
-            headers["Authorization"] = f"Bearer {self.session.access_token}"
-
+            headers["Authorization"] = f"******"
         if self.session.wssdi:
             headers["x-ws-device-id"] = self.session.wssdi
-
         if WealthsimpleAPI.user_agent:
             headers["User-Agent"] = WealthsimpleAPI.user_agent
+        return headers
 
+    def _request(
+        self,
+        url: str,
+        method: str = "GET",
+        data: dict | None = None,
+        headers: dict | None = None,
+    ):
         try:
-            response = requests.request(method, url, json=data, headers=headers)
-
-            if return_response:
-                return response
-
-            if return_headers:
-                # Combine headers and body as a single string
-                response_headers = "\r\n".join(
-                    f"{k}: {v}" for k, v in response.headers.items()
-                )
-                return f"{response_headers}\r\n\r\n{response.text}"
-
-            return response.json()
-        except requests.exceptions.RequestException as e:
+            return requests.request(
+                method, url, json=data, headers=self._build_headers(method, data, headers)
+            )
+        except requests.errors.RequestsError as e:
             raise CurlException(f"HTTP request failed: {e}")
-
-    def send_get(
-        self,
-        url: str,
-        headers: dict | None = None,
-        return_headers: bool = False,
-        return_response: bool = False,
-    ) -> Any:
-        return self.send_http_request(
-            url,
-            "GET",
-            headers=headers,
-            return_headers=return_headers,
-            return_response=return_response,
-        )
-
-    def send_post(
-        self,
-        url: str,
-        data: dict,
-        headers: dict | None = None,
-        return_headers: bool = False,
-        return_response: bool = False,
-    ) -> Any:
-        return self.send_http_request(
-            url,
-            "POST",
-            data=data,
-            headers=headers,
-            return_headers=return_headers,
-            return_response=return_response,
-        )
-
     def _bootstrap_device_id_and_client(self) -> None:
         """Perform the unauthenticated bootstrap requests to obtain wssdi (device ID)
         and client_id.
 
-        Uses send_http_request (with return_response) so that configured user_agent
-        is applied and network errors are consistently wrapped as CurlException.
+        Uses _request so that configured user_agent is applied and network errors
+        are consistently wrapped as CurlException.
         Prefers the requests cookie jar (which correctly handles multiple Set-Cookie
         headers) with a narrow fallback to the old parsing logic for unusual
         environments.
@@ -134,9 +89,7 @@ class WealthsimpleAPIBase:
 
         if not self.session.wssdi or not self.session.client_id:
             # Fetch the login page via the wrapper for consistent headers + error handling.
-            resp = self.send_http_request(
-                "https://my.wealthsimple.com/app/login", method="GET", return_response=True
-            )
+            resp = self._request("https://my.wealthsimple.com/app/login", method="GET")
 
             # Preferred path: cookie jar (handles duplicates, path, domain, etc.)
             if not self.session.wssdi and "wssdi" in resp.cookies:
@@ -177,9 +130,7 @@ class WealthsimpleAPIBase:
                 )
 
             # Fetch the JS bundle to extract the production clientId.
-            js_resp = self.send_http_request(
-                app_js_url, method="GET", return_response=True
-            )
+            js_resp = self._request(app_js_url, method="GET")
 
             match = re.search(
                 r'"production"[^}]*clientId:"([a-f0-9]+)"',
@@ -247,7 +198,7 @@ class WealthsimpleAPIBase:
                 "x-wealthsimple-client": "@wealthsimple/wealthsimple",
                 "x-ws-profile": "invest",
             }
-            response = self.send_post(f"{self.OAUTH_BASE_URL}/token", data, headers)
+            response = self._request(f"{self.OAUTH_BASE_URL}/token", method="POST", data=data, headers=headers).json()
             if "access_token" not in response or "refresh_token" not in response:
                 raise ManualLoginRequired(
                     f"OAuth token invalid and cannot be refreshed: {response.get('error', 'Invalid response from API')}"
@@ -295,9 +246,9 @@ class WealthsimpleAPIBase:
             headers["x-wealthsimple-otp"] = f"{otp_answer};remember=true"
 
         # Send the POST request for token
-        response_data = self.send_post(
-            url=f"{self.OAUTH_BASE_URL}/token", data=data, headers=headers
-        )
+        response_data = self._request(
+            url=f"{self.OAUTH_BASE_URL}/token", method="POST", data=data, headers=headers
+        ).json()
 
         if (
             "error" in response_data
@@ -345,9 +296,9 @@ class WealthsimpleAPIBase:
             "x-platform-os": "web",
         }
 
-        response_data = self.send_post(
-            url=self.GRAPHQL_URL, data=query, headers=headers
-        )
+        response_data = self._request(
+            url=self.GRAPHQL_URL, method="POST", data=query, headers=headers
+        ).json()
 
         if "data" not in response_data:
             raise WSApiException(f"GraphQL query failed: {query_name}", response_data)
@@ -408,9 +359,9 @@ class WealthsimpleAPIBase:
     def get_token_info(self):
         if not self.session.token_info:
             headers = {"x-wealthsimple-client": "@wealthsimple/wealthsimple"}
-            response = self.send_get(
-                self.OAUTH_BASE_URL + "/token/info", headers=headers
-            )
+            response = self._request(
+                self.OAUTH_BASE_URL + "/token/info", method="GET", headers=headers
+            ).json()
             self.session.token_info = response
         return self.session.token_info
 

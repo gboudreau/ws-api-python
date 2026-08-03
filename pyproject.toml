@@ -25,7 +25,7 @@ classifiers = [
 ]
 requires-python = ">=3.10"
 dependencies = [
-  "requests",
+  "curl_cffi",
 ]
 keywords = ["wealthsimple"]
 

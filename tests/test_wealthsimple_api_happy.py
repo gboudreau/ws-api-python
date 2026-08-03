@@ -10,7 +10,11 @@ from ws_api.wealthsimple_api import WealthsimpleAPI, WealthsimpleAPIBase
 
 @pytest.fixture
 def api_base():
-    return WealthsimpleAPIBase()
+    sess = WSAPISession()
+    sess.client_id = "test_client"
+    sess.session_id = "test_session"
+    sess.wssdi = "test_wssdi"
+    return WealthsimpleAPIBase(sess)
 
 
 @pytest.fixture
@@ -24,33 +28,37 @@ def api_with_session():
 
 @pytest.fixture
 def api():
-    return WealthsimpleAPI()
+    sess = WSAPISession()
+    sess.client_id = "test_client"
+    sess.session_id = "test_session"
+    sess.wssdi = "test_wssdi"
+    return WealthsimpleAPI(sess)
 
 
 def test_send_http_request_return_headers(api_base):
-    """Test send_http_request with return_headers=True path."""
+    """Test _request return_headers-equivalent (response text with headers)."""
     with patch("ws_api.wealthsimple_api.requests.request") as mock_request:
         mock_resp = MagicMock()
         mock_resp.headers = {"Set-Cookie": "wssdi=test; path=/"}
         mock_resp.text = "response body"
         mock_request.return_value = mock_resp
 
-        result = api_base.send_http_request(
-            "https://test.com", "GET", return_headers=True
-        )
+        resp = api_base._request("https://test.com", "GET")
+        response_headers = "\r\n".join(f"{k}: {v}" for k, v in resp.headers.items())
+        result = f"{response_headers}\r\n\r\n{resp.text}"
 
         expected_headers = "Set-Cookie: wssdi=test; path=/\r\n\r\nresponse body"
         assert result == expected_headers
 
 
-def test_send_post(api_base):
-    """Test send_post delegation."""
+def test_request_post_delegation(api_base):
+    """Test _request POST path."""
     with patch("ws_api.wealthsimple_api.requests.request") as mock_request:
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"ok": True}
         mock_request.return_value = mock_resp
 
-        result = api_base.send_post("https://test.com", {"data": 1})
+        result = api_base._request("https://test.com", method="POST", data={"data": 1}).json()
 
         assert result == {"ok": True}
 
@@ -166,11 +174,12 @@ def test_check_oauth_token_refresh(api_base):
     api_base.session.refresh_token = "old_refresh"
     api_base.session.client_id = "test_client"
 
-    with patch.object(api_base, "send_post") as mock_post:
-        mock_post.return_value = {
-            "access_token": "new_access",
-            "refresh_token": "new_refresh",
-        }
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {
+        "access_token": "new_access",
+        "refresh_token": "new_refresh",
+    }
+    with patch.object(api_base, "_request", return_value=mock_resp) as mock_req:
         with patch.object(
             api_base,
             "search_security",
@@ -180,7 +189,7 @@ def test_check_oauth_token_refresh(api_base):
         ):
             api_base.check_oauth_token()
 
-        mock_post.assert_called_once()
+        mock_req.assert_called_once()
         assert api_base.session.access_token == "new_access"
         assert api_base.session.refresh_token == "new_refresh"
 
@@ -189,11 +198,12 @@ def test_login_internal_happy(api_base):
     """Test login_internal happy path."""
     api_base.session.client_id = "test_client"
 
-    with patch.object(api_base, "send_post") as mock_post:
-        mock_post.return_value = {
-            "access_token": "access_token",
-            "refresh_token": "refresh_token",
-        }
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {
+        "access_token": "access_token",
+        "refresh_token": "refresh_token",
+    }
+    with patch.object(api_base, "_request", return_value=mock_resp):
         sess = api_base.login_internal("user", "pass")
         assert sess.access_token == "access_token"
         assert sess.refresh_token == "refresh_token"
@@ -212,8 +222,9 @@ def test_do_graphql_query_simple(api_base):
         }
     }
 
-    with patch.object(api_base, "send_post") as mock_post:
-        mock_post.return_value = fake_data
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = fake_data
+    with patch.object(api_base, "_request", return_value=mock_resp):
         result = api_base.do_graphql_query(
             "FetchAllAccountFinancials",
             {"identityId": "id"},
@@ -227,13 +238,14 @@ def test_get_token_info(api_base):
     """Test get_token_info with caching."""
     fake_info = {"identity_canonical_id": "fake_id"}
 
-    with patch.object(api_base, "send_get") as mock_get:
-        mock_get.return_value = fake_info
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = fake_info
+    with patch.object(api_base, "_request", return_value=mock_resp) as mock_req:
         result1 = api_base.get_token_info()
         assert result1 == fake_info
         result2 = api_base.get_token_info()
         assert result2 == fake_info
-        mock_get.assert_called_once()
+        mock_req.assert_called_once()
 
 
 @pytest.mark.parametrize(

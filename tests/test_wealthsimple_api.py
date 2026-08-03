@@ -39,19 +39,19 @@ def test_wealthsimple_api_init_with_session(mock_session):
     assert api.session.wssdi == "test_wssdi"
 
 
-@patch("requests.request")
-def test_send_http_request_post(mock_request, mock_session):
+@patch("ws_api.wealthsimple_api.requests.request")
+def test_request_post(mock_request, mock_session):
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"status": "ok"}
     mock_request.return_value = mock_resp
 
     api = WealthsimpleAPIBase(mock_session)
 
-    result = api.send_http_request(
+    result = api._request(
         "https://test.example.com/api",
         "POST",
         {"grant_type": "password", "username": "test", "password": "test"},
-    )
+    ).json()
 
     assert result == {"status": "ok"}
 
@@ -67,19 +67,19 @@ def test_send_http_request_post(mock_request, mock_session):
     headers = kwargs["headers"]
     assert headers["Content-Type"] == "application/json"
     assert headers["x-ws-session-id"] == "test_session_id"
-    assert headers["Authorization"] == "Bearer test_access_token"
+    assert headers["Authorization"] == "******"
     assert headers["x-ws-device-id"] == "test_wssdi"
 
 
-@patch("requests.request")
-def test_send_get_request(mock_request, mock_session):
+@patch("ws_api.wealthsimple_api.requests.request")
+def test_request_get(mock_request, mock_session):
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"status": "ok"}
     mock_request.return_value = mock_resp
 
     api = WealthsimpleAPIBase(mock_session)
 
-    result = api.send_get("https://test.example.com/get")
+    result = api._request("https://test.example.com/get", method="GET").json()
 
     assert result == {"status": "ok"}
 
