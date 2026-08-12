@@ -895,15 +895,21 @@ class WealthsimpleAPI(WealthsimpleAPIBase):
             "object",
         )
 
-    def get_account_unrealized_pnl(self, account_id: str, currency: str) -> Any:
+    def get_account_unrealized_pnl(
+        self, account_id: str, currency: str, combined: bool = True
+    ) -> Any:
         """Retrieve unrealized P&L for a specific account.
 
         Args:
             account_id: The account ID to retrieve unrealized P&L for.
             currency: Currency to return amounts in (CAD or USD).
+            combined: If True (default), return only the combined unrealized PnL.
+                If False, return the full account.financials object, which
+                contains more information.
 
         Returns:
-            dict: Unrealized P&L including amount and rate.
+            dict: Unrealized P&L including amount and rate (when combined=True),
+            or the full account.financials object (when combined=False).
 
         Raises:
             WSApiException: If the response format is unexpected.
@@ -914,7 +920,9 @@ class WealthsimpleAPI(WealthsimpleAPIBase):
                 "id": account_id,
                 "currency": currency,
             },
-            "account.financials.currentCombined.unrealizedPnL",
+            "account.financials.currentCombined.unrealizedPnL"
+            if combined
+            else "account.financials",
             "object",
         )
 
