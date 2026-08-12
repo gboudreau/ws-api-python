@@ -785,19 +785,19 @@ class WealthsimpleAPI(WealthsimpleAPIBase):
         Raises:
             WSApiException: If the response format is unexpected.
         """
-        statements = self.do_graphql_query(
-            "FetchBrokerageMonthlyStatementTransactions",
+        statement = self.do_graphql_query(
+            "FetchMonthlyStatementWithTransactions",
             {
                 "accountId": account_id,
                 "period": period,
+                "statementType": "brokerage_monthly_statement",
             },
-            "brokerageMonthlyStatements",
-            "array",
+            "monthlyStatement",
+            "object",
         )
 
         transactions = []
-        if isinstance(statements, list) and len(statements) > 0:
-            statement = statements[0]
+        if isinstance(statement, dict):
             data = statement.get("data") if "data" in statement else {}
             transactions = (
                 data.get("currentTransactions") if "currentTransactions" in data else []

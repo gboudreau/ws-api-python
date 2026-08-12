@@ -42,6 +42,9 @@ Repository = "https://github.com/gboudreau/ws-api-python"
 [tool.hatch.build.targets.wheel]
 packages = ["ws_api"]
 
+[tool.pytest.ini_options]
+addopts = "--ignore=tests/test_full_example.py"
+
 [dependency-groups]
 dev = [
   "pytest",

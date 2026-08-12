@@ -425,10 +425,22 @@ def test_get_corporate_action_child_activities(api):
 def test_get_statement_transactions(api):
     """Smoke test get_statement_transactions."""
     fake_transactions = [{"balance": 100}]
-    fake_statements = [{"data": {"currentTransactions": fake_transactions}}]
-    with patch.object(api, "do_graphql_query", return_value=fake_statements):
+    fake_statement = {"data": {"currentTransactions": fake_transactions}}
+    with patch.object(
+        api, "do_graphql_query", return_value=fake_statement
+    ) as mock_query:
         result = api.get_statement_transactions("acc_id", "2023-01-01")
         assert result == fake_transactions
+        mock_query.assert_called_once_with(
+            "FetchMonthlyStatementWithTransactions",
+            {
+                "accountId": "acc_id",
+                "period": "2023-01-01",
+                "statementType": "brokerage_monthly_statement",
+            },
+            "monthlyStatement",
+            "object",
+        )
 
 
 def test_get_identity_positions(api):
