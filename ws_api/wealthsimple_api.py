@@ -228,11 +228,18 @@ class WealthsimpleAPIBase:
             except WSApiException as e:
                 errors = e.response.get("errors") if e.response is not None else None
                 first_error = errors[0] if isinstance(errors, list) and errors else None
+                code = (
+                    (first_error.get("extensions") or {}).get("code")
+                    if isinstance(first_error, dict)
+                    else None
+                )
                 is_not_authorized = e.response is not None and (
-                    e.response.get("message") == "Not Authorized."
+                    code == "UNAUTHENTICATED"
+                    or (e.response.get("message") or "").rstrip(".") == "Not Authorized"
                     or (
                         isinstance(first_error, dict)
-                        and first_error.get("message") == "Not Authorized."
+                        and (first_error.get("message") or "").rstrip(".")
+                        == "Not Authorized"
                     )
                 )
                 if not is_not_authorized:
