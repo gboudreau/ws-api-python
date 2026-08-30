@@ -232,11 +232,14 @@ def _format_trade(act: dict, api_context) -> bool:
         "MANAGED_SELL",
         "CRYPTO_BUY",
         "CRYPTO_SELL",
+        "NEW_ISSUE_BUY",
     ):
         return False
 
     if "MANAGED" in act["type"]:
         verb = "Managed transaction"
+    elif "NEW_ISSUE_BUY" in act["type"]:
+        verb = "IPO allocation"
     else:
         verb = act["subType"].replace("_", " ").capitalize()
         if "CRYPTO" in act["type"]:
@@ -349,6 +352,10 @@ def format_activity_description(act: dict, api_context) -> None:
         security = api_context.security_id_to_symbol(act["securityId"])
         act["description"] = f"Dividend: {security}"
 
+    elif act["type"] == "STOCK_DIVIDEND":
+        security = api_context.security_id_to_symbol(act["securityId"])
+        act["description"] = f"Stock Dividend: {security}"
+
     elif act["type"] == "FUNDS_CONVERSION":
         act["description"] = (
             f"Funds converted: {act['currency']} from {'USD' if act['currency'] == 'CAD' else 'CAD'}"
@@ -409,6 +416,9 @@ def format_activity_description(act: dict, api_context) -> None:
 
     elif act["type"] == "REIMBURSEMENT" and act["subType"] == "REWARD":
         act["description"] = "Reimbursement: Reward"
+
+    elif act["type"] == "REIMBURSEMENT" and act["subType"] == "ATM":
+        act["description"] = "Reimbursement: ATM fee"
 
     elif act["type"] == "SPEND" and act["subType"] == "PREPAID":
         merchant = act["spendMerchant"]
