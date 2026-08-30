@@ -50,15 +50,18 @@ def format_account_description(account: dict) -> None:
             if account["accountOwnerConfiguration"] == "MULTI_OWNER"
             else "Cash"
         )
-    # Special case: MANAGED_NON_REGISTERED depends on features
-    elif account_type == "MANAGED_NON_REGISTERED":
+    # Special case: MANAGED_NON_REGISTERED and MANAGED_PORTFOLIO_NON_REGISTERED depends on features
+    elif account_type == "MANAGED_NON_REGISTERED" or account_type == "MANAGED_PORTFOLIO_NON_REGISTERED":
         features = {f["name"] for f in account["accountFeatures"]}
         if "PRIVATE_CREDIT" in features:
             account["description"] = "Non-registered: managed - private credit"
         elif "PRIVATE_EQUITY" in features:
             account["description"] = "Non-registered: managed - private equity"
         elif "MANAGED" in features:
-            account["description"] = "Non-registered: managed"
+            if account_type == "MANAGED_PORTFOLIO_NON_REGISTERED":
+                account["description"] = "Non-registered: managed portfolio"
+            else:
+                account["description"] = "Non-registered: managed"
         else:
             account["description"] = account_type
     # Simple lookup for all other types
