@@ -33,7 +33,11 @@ class WealthsimpleAPIBase:
         self.security_market_data_cache_getter = None
         self.security_market_data_cache_setter = None
         self.session = WSAPISession()
-        self.http = requests.Session()
+        # Cloudflare on my.wealthsimple.com returns 429 / error 1015 unless the
+        # TLS fingerprint looks like a browser. curl_cffi Session() without
+        # impersonate is blocked; the login-page HTML parser then fails with
+        # "Couldn't find app JS URL in login page response body."
+        self.http = requests.Session(impersonate="chrome")
         self.start_session(sess)
 
     user_agent: str | None = None
