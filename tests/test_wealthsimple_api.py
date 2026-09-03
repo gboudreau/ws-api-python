@@ -39,6 +39,12 @@ def test_wealthsimple_api_init_with_session(mock_session):
     assert api.session.wssdi == "test_wssdi"
 
 
+def test_http_session_impersonates_chrome(mock_session):
+    """Cloudflare 1015-blocks default curl_cffi TLS fingerprints on /app/login."""
+    api = WealthsimpleAPI(mock_session)
+    assert api.http.impersonate == "chrome"
+
+
 @patch("curl_cffi.requests.Session.request")
 def test_send_http_request_post(mock_request, mock_session):
     mock_resp = MagicMock()
