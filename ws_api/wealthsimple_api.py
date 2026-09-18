@@ -1031,8 +1031,13 @@ class WealthsimpleAPI(WealthsimpleAPIBase):
             "identity.netWorth",
             "object",
         )
+
+        accounts = [edge["node"] for edge in result["accounts"]["edges"]]
+        for account in accounts:
+            format_account_description(account)
+
         return {
-            "accounts": [edge["node"] for edge in result["accounts"]["edges"]],
+            "accounts": accounts,
             "externalFinancialEntities": result["externalFinancialEntities"],
         }
 

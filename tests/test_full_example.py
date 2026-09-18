@@ -76,6 +76,9 @@ class WSApiTest:
 
         net_worth = ws.get_net_worth_with_history("HOUSEHOLD", "CAD")
         print("Household Net Worth: %.2f" % float(net_worth["balance"]["amount"]))
+        net_worth_accounts = ws.get_net_worth_accounts()
+        for account in net_worth_accounts["accounts"]:
+            print("  - %s (%s) = %.2f" % (account["description"], account["id"], float(account["financials"]["currentCombined"]["netLiquidationValueV2"]["amount"])))
 
         accounts = ws.get_accounts()
 
