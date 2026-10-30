@@ -43,7 +43,8 @@ class WSApiTest:
                             break
                     if not password:
                         password = input("Password: ")
-                    WealthsimpleAPI.login(username, password, otp_answer, persist_session_fct=persist_session_fct)
+                    WealthsimpleAPI.login(username, password, otp_answer, persist_session_fct=persist_session_fct,
+                                          approval_callback=lambda: print("Approve the login in the Wealthsimple mobile app."))
                     # The above will throw exceptions if login failed
                     # So we break (out of the login "while True" loop) on success:
                     session = WSAPISession.from_json(keyring.get_password(f"{keyring_service_name}.{username}", "session"))

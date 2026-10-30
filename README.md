@@ -38,8 +38,12 @@ If you installed using `uv` or `pip` (and you update using either), they will ta
 ```python
 from ws_api import WealthsimpleAPI
 
-# Login (will prompt for username/password/TOTP)
-session = WealthsimpleAPI.login(username="you@example.com", password="yourpassword")
+# Login (will prompt for username/password/TOTP); notify the user if Wealthsimple requires mobile approval.
+session = WealthsimpleAPI.login(
+    username="you@example.com",
+    password="yourpassword",
+    approval_callback=lambda: print("Approve the login in the Wealthsimple mobile app."),
+)
 ws = WealthsimpleAPI.from_token(session)
 
 # Get your accounts
@@ -47,6 +51,11 @@ accounts = ws.get_accounts()
 for account in accounts:
     print(f"{account['description']}: {account['number']}")
 ```
+
+When mobile approval is required, login polls for up to two minutes and retries
+automatically after approval. Without an approval callback, it emits a warning.
+If a TOTP code is required, login raises `OTPRequiredException`; callers must
+obtain the code and retry with `otp_answer`. See the full example below.
 
 ### Full Example
 

@@ -9,7 +9,7 @@ from ws_api.exceptions import (
 from ws_api.session import WSAPISession
 from ws_api.wealthsimple_api import WealthsimpleAPI
 
-__version__ = "0.39.3"
+__version__ = "0.40.0"
 
 __all__ = [
     "CurlException",

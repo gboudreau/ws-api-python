@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ws_api.exceptions import WSApiException
+from ws_api.exceptions import LoginFailedException, OTPRequiredException, WSApiException
 from ws_api.formatters import format_account_description
 from ws_api.session import WSAPISession
 from ws_api.wealthsimple_api import WealthsimpleAPI, WealthsimpleAPIBase
@@ -205,13 +205,76 @@ def test_login_internal_happy(api_base):
     api_base.session.client_id = "test_client"
 
     with patch.object(api_base, "send_post") as mock_post:
-        mock_post.return_value = {
-            "access_token": "access_token",
-            "refresh_token": "refresh_token",
-        }
+        mock_post.side_effect = [
+            {"access_token": "client_token"},
+            {"access_token": "access_token", "refresh_token": "refresh_token"},
+        ]
         sess = api_base.login_internal("user", "pass")
         assert sess.access_token == "access_token"
         assert sess.refresh_token == "refresh_token"
+
+
+def test_login_approval_polls_and_retries_with_same_session(api_with_session):
+    responses = [
+        {"access_token": "client_token"},
+        {"error": "login_challenge_required", "login_challenge_id": "challenge", "purpose": "login_approval"},
+        {"status": "pending"},
+        {"status": "approved"},
+        {"access_token": "user_token", "refresh_token": "refresh"},
+    ]
+    callback = MagicMock()
+    persist = MagicMock()
+    with patch.object(api_with_session.http, "request") as request, patch("time.sleep"):
+        request.side_effect = [MagicMock(json=MagicMock(return_value=r)) for r in responses]
+        session = api_with_session.login_internal("user", "pass", otp_answer="123456", persist_session_fct=persist, approval_callback=callback)
+
+    calls = request.call_args_list
+    assert calls[0].kwargs["json"] == {"grant_type": "client_credentials", "scope": "read", "client_id": "test_client"}
+    assert [call.kwargs["method"] for call in calls] == ["POST", "POST", "GET", "GET", "POST"]
+    for call in calls[1:]:
+        assert call.kwargs["headers"]["Authorization"] == "Bearer client_token"
+        assert call.kwargs["headers"]["x-ws-session-id"] == "test_session"
+        assert call.kwargs["headers"]["x-ws-device-id"] == "test_wssdi"
+    assert calls[2].kwargs["headers"]["x-wealthsimple-login-challenge-id"] == "challenge"
+    assert calls[1].kwargs["headers"]["x-wealthsimple-otp"] == "123456;remember=true"
+    assert calls[4].kwargs["headers"]["x-wealthsimple-login-challenge-id"] == "challenge"
+    assert "x-wealthsimple-otp" not in calls[4].kwargs["headers"]
+    assert calls[2].kwargs["url"] == "https://api.production.wealthsimple.com/v1/login_challenge"
+    assert calls[1].kwargs["json"] == calls[4].kwargs["json"]
+    callback.assert_called_once_with()
+    persist.assert_called_once()
+    assert session.access_token == "user_token"
+
+
+@pytest.mark.parametrize("status", ["rejected", "expired", "unexpected"])
+def test_login_approval_terminal_status_fails(api_with_session, status):
+    with patch.object(api_with_session, "send_post", side_effect=[
+        {"access_token": "client_token"},
+        {"error": "login_challenge_required", "login_challenge_id": "challenge", "purpose": "login_approval"},
+    ]), patch.object(api_with_session, "send_get", return_value={"status": status}), pytest.raises(LoginFailedException):
+        api_with_session.login_internal("user", "pass", approval_callback=lambda: None)
+    assert api_with_session.session.access_token is None
+
+
+def test_login_approval_timeout(api_with_session):
+    with patch.object(api_with_session, "send_post", side_effect=[
+        {"access_token": "client_token"},
+        {"error": "login_challenge_required", "login_challenge_id": "challenge", "purpose": "login_approval"},
+    ]), patch.object(api_with_session, "send_get", return_value={"status": "pending"}), patch("time.monotonic", side_effect=[0, 120]), pytest.raises(LoginFailedException, match="timed out"):
+        api_with_session.login_internal("user", "pass", approval_callback=lambda: None)
+
+
+def test_client_credentials_failure_stops_login(api_with_session):
+    with patch.object(api_with_session, "send_post", return_value={"error": "invalid_client"}) as post, pytest.raises(LoginFailedException, match="Client credentials failed"):
+        api_with_session.login_internal("user", "pass")
+    assert post.call_count == 1
+
+
+def test_login_still_requests_otp(api_with_session):
+    with patch.object(api_with_session, "send_post", side_effect=[
+        {"access_token": "client_token"}, {"error": "invalid_grant"}
+    ]), pytest.raises(OTPRequiredException):
+        api_with_session.login_internal("user", "pass")
 
 
 def test_do_graphql_query_simple(api_base):

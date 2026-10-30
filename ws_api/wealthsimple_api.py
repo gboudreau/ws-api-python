@@ -1,5 +1,7 @@
 import re
+import time
 import uuid
+import warnings
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from inspect import signature
@@ -67,8 +69,8 @@ class WealthsimpleAPIBase:
             headers["x-ws-session-id"] = self.session.session_id
 
         if self.session.access_token and (
-            not data or data.get("grant_type") != "refresh_token"
-        ):
+            not data or data.get("grant_type") not in ("refresh_token", "client_credentials")
+        ) and not any(key.lower() == "authorization" for key in headers):
             headers["Authorization"] = f"Bearer {self.session.access_token}"
 
         if self.session.wssdi:
@@ -290,7 +292,20 @@ class WealthsimpleAPIBase:
         otp_answer: str | None = None,
         persist_session_fct: Callable | None = None,
         scope: str = SCOPE_READ_ONLY,
+        approval_callback: Callable[[], None] | None = None,
     ) -> WSAPISession:
+        client_response = self.send_post(
+            url=f"{self.OAUTH_BASE_URL}/token",
+            data={
+                "grant_type": "client_credentials",
+                "scope": "read",
+                "client_id": self.session.client_id,
+            },
+        )
+        client_token = client_response.get("access_token")
+        if not client_token:
+            raise LoginFailedException("Client credentials failed", client_response)
+
         data = {
             "grant_type": "password",
             "username": username,
@@ -304,6 +319,7 @@ class WealthsimpleAPIBase:
         headers = {
             "x-wealthsimple-client": "@wealthsimple/wealthsimple",
             "x-ws-profile": "undefined",
+            "Authorization": f"Bearer {client_token}",
         }
 
         if otp_answer:
@@ -313,6 +329,40 @@ class WealthsimpleAPIBase:
         response_data = self.send_post(
             url=f"{self.OAUTH_BASE_URL}/token", data=data, headers=headers
         )
+
+        if (
+            response_data.get("error") == "login_challenge_required"
+            and response_data.get("purpose") == "login_approval"
+            and response_data.get("login_challenge_id")
+        ):
+            if approval_callback:
+                approval_callback()
+            else:
+                warnings.warn(
+                    "Approve the login in the Wealthsimple mobile app.", stacklevel=2
+                )
+            deadline = time.monotonic() + 120
+            while True:
+                challenge = self.send_get(
+                    "https://api.production.wealthsimple.com/v1/login_challenge",
+                    headers={
+                        "Authorization": f"Bearer {client_token}",
+                        "x-wealthsimple-login-challenge-id": response_data["login_challenge_id"],
+                    },
+                )
+                if challenge.get("status") == "approved":
+                    break
+                if challenge.get("status") != "pending":
+                    raise LoginFailedException("Login approval failed", challenge)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise LoginFailedException("Login approval timed out", challenge)
+                time.sleep(min(5, remaining))
+            retry_headers = {**headers, "x-wealthsimple-login-challenge-id": response_data["login_challenge_id"]}
+            retry_headers.pop("x-wealthsimple-otp", None)
+            response_data = self.send_post(
+                url=f"{self.OAUTH_BASE_URL}/token", data=data, headers=retry_headers
+            )
 
         if (
             "error" in response_data
@@ -436,6 +486,7 @@ class WealthsimpleAPIBase:
         otp_answer: str | None = None,
         persist_session_fct: Callable | None = None,
         scope: str = SCOPE_READ_ONLY,
+        approval_callback: Callable[[], None] | None = None,
     ) -> WSAPISession:
         """Login to Wealthsimple API and return a session object.
 
@@ -445,6 +496,7 @@ class WealthsimpleAPIBase:
             otp_answer (str, optional): The answer to the 2FA code. Defaults to None.
             persist_session_fct (callable, optional): A function to call to persist the session. Defaults to None.
             scope (str, optional): The OAuth scope for the session. Defaults to SCOPE_READ_ONLY.
+            approval_callback (callable, optional): Called when mobile login approval is required.
 
         Returns:
             WSAPISession: The session object.
@@ -455,7 +507,7 @@ class WealthsimpleAPIBase:
         """
         ws = WealthsimpleAPI()
         return ws.login_internal(
-            username, password, otp_answer, persist_session_fct, scope
+            username, password, otp_answer, persist_session_fct, scope, approval_callback
         )
 
     @staticmethod
