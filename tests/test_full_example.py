@@ -1,4 +1,5 @@
 from datetime import datetime
+import getpass
 import json
 import keyring
 import os
@@ -42,7 +43,7 @@ class WSApiTest:
                             session = WSAPISession.from_json(session)
                             break
                     if not password:
-                        password = input("Password: ")
+                        password = getpass.getpass("Password: ")
                     WealthsimpleAPI.login(username, password, otp_answer, persist_session_fct=persist_session_fct,
                                           approval_callback=lambda: print("Approve the login in the Wealthsimple mobile app."))
                     # The above will throw exceptions if login failed
@@ -50,7 +51,7 @@ class WSApiTest:
                     session = WSAPISession.from_json(keyring.get_password(f"{keyring_service_name}.{username}", "session"))
                     break
                 except OTPRequiredException:
-                    otp_answer = input("TOTP code: ")
+                    otp_answer = getpass.getpass("TOTP code: ")
                 except LoginFailedException:
                     print("Login failed. Try again.")
                     username = None
