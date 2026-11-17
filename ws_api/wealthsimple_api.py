@@ -176,31 +176,27 @@ class WealthsimpleAPIBase:
                             break
 
             if not self.session.wssdi:
-                raise UnexpectedException(
-                    "Couldn't find wssdi in login page response headers."
-                )
+                # Ok, we'll just generate one ourselves!
+                self.session.wssdi = self.uuidv4()
 
         if not self.session.client_id:
-            if not app_js_url:
-                raise UnexpectedException(
-                    "Couldn't find app JS URL in login page response body."
+            if app_js_url:
+                # Fetch the JS bundle to extract the production clientId.
+                js_resp = self.send_get(
+                    app_js_url, return_response=True
                 )
 
-            # Fetch the JS bundle to extract the production clientId.
-            js_resp = self.send_get(
-                app_js_url, return_response=True
-            )
-
-            match = re.search(
-                r'"production"[^}]*clientId:"([a-f0-9]+)"',
-                js_resp.text,
-                re.IGNORECASE,
-            )
-            if match:
-                self.session.client_id = match.group(1)
+                match = re.search(
+                    r'"production"[^}]*clientId:"([a-f0-9]+)"',
+                    js_resp.text,
+                    re.IGNORECASE,
+                )
+                if match:
+                    self.session.client_id = match.group(1)
 
             if not self.session.client_id:
-                raise UnexpectedException("Couldn't find clientId in app JS.")
+                warnings.warn("Using hard-coded client_id, because app JS URL could not be loaded. This might cause an authentication failure.")
+                self.session.client_id = '4da53ac2b03225bed1550eba8e4611e086c7b905a3855e6ed12ea08c246758fa' # Valid as of 2026-11-16 - update in the future as needed
 
     def start_session(self, sess: WSAPISession | None = None):
         if sess:
