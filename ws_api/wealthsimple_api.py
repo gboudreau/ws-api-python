@@ -1,3 +1,5 @@
+import getpass
+import json
 import re
 import time
 import uuid
@@ -221,6 +223,18 @@ class WealthsimpleAPIBase:
             "array",
         )
 
+    def _persist_session(
+        self,
+        callback: Callable | None,
+        username: str | None,
+    ) -> None:
+        if not callback:
+            return
+        if len(signature(callback).parameters) == 2:
+            callback(self.session.to_json(), username)
+        else:
+            callback(self.session.to_json())
+
     def check_oauth_token(
         self, persist_session_fct: Callable | None = None, username=None
     ):
@@ -267,11 +281,7 @@ class WealthsimpleAPIBase:
                 )
             self.session.access_token = response["access_token"]
             self.session.refresh_token = response["refresh_token"]
-            if persist_session_fct:
-                if len(signature(persist_session_fct).parameters) == 2:
-                    persist_session_fct(self.session.to_json(), username)
-                else:
-                    persist_session_fct(self.session.to_json())
+            self._persist_session(persist_session_fct, username)
             return
 
         raise ManualLoginRequired("OAuth token invalid and cannot be refreshed.")
@@ -280,6 +290,150 @@ class WealthsimpleAPIBase:
     SCOPE_READ_WRITE = (
         "invest.read trade.read tax.read invest.write trade.write tax.write"
     )
+
+    @staticmethod
+    def passkey_chrome_assertion(options: dict) -> dict | None:
+        """Prompt for a WebAuthn assertion from Chrome DevTools without echoing it."""
+        options_literal = json.dumps(json.dumps(options))
+        print(f"""\
+Run this snippet in Chrome DevTools Console on https://my.wealthsimple.com/app/login:
+
+(async () => {{
+  if (location.origin !== 'https://my.wealthsimple.com') {{
+    throw new Error('Open the official Wealthsimple sign-in page first.');
+  }}
+  const copyAssertion = copy;
+  const publicKey = PublicKeyCredential.parseRequestOptionsFromJSON(JSON.parse({options_literal}));
+  const credential = await navigator.credentials.get({{ publicKey }});
+  if (!credential) throw new Error('No passkey assertion.');
+  copyAssertion(JSON.stringify(credential.toJSON()));
+  console.info('Assertion copied. Paste it into your local terminal prompt now.');
+}})();
+""")
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", getpass.GetPassWarning)
+                value = getpass.getpass(
+                    "Paste the one-time assertion (input hidden), then hit [return]: "
+                )
+        except getpass.GetPassWarning:
+            raise LoginFailedException(
+                "Run passkey login in a terminal that can hide input."
+            ) from None
+        try:
+            return json.loads(value) if value else None
+        except ValueError:
+            raise LoginFailedException("The pasted assertion was not valid JSON.") from None
+
+    @staticmethod
+    def login_with_passkey(
+        username: str,
+        get_assertion: Callable[[dict], dict | None],
+        persist_session_fct: Callable | None = None,
+        scope: str = SCOPE_READ_ONLY,
+    ) -> WSAPISession:
+        """Request a session using an existing passkey.
+
+        The callback receives WebAuthn request options and must return the JSON
+        assertion from a browser on Wealthsimple's origin, or None to cancel.
+        If supplied, persist_session_fct receives the session JSON on success.
+        A two-argument callback also receives the supplied username unchanged.
+        It can be a local session name and is not sent to Wealthsimple.
+        The requested OAuth scope defaults to SCOPE_READ_ONLY.
+        This uses Wealthsimple's private web API and may stop working if it changes.
+        """
+        ws = WealthsimpleAPI()
+        token_url = f"{ws.OAUTH_BASE_URL}/token"
+
+        def post(url, data, headers, failure):
+            try:
+                response = ws.send_http_request(
+                    url, data=data, headers=headers, return_response=True
+                )
+                body = response.json()
+            except (CurlException, ValueError):
+                raise LoginFailedException(failure) from None
+            if isinstance(body, dict) and body.get("error") == "login_challenge_required":
+                raise LoginFailedException(
+                    "Wealthsimple requires additional approval; use the regular login flow."
+                )
+            if not 200 <= response.status_code < 300 or not isinstance(body, dict) or "error" in body:
+                raise LoginFailedException(failure)
+            return body
+
+        client = post(
+            token_url,
+            {
+                "grant_type": "client_credentials",
+                "scope": "read",
+                "client_id": ws.session.client_id,
+            },
+            {},
+            "Could not obtain the Wealthsimple app token.",
+        )
+        app_token = client.get("access_token")
+        if not isinstance(app_token, str) or not app_token:
+            raise LoginFailedException("Wealthsimple did not return an app token.")
+
+        headers = {"x-wealthsimple-client": "@wealthsimple/wealthsimple"}
+        challenge = post(
+            "https://api.production.wealthsimple.com/v1/webauthn/authentication/options",
+            None,
+            {**headers, "Authorization": f"Bearer {app_token}"},
+            "Could not request a Wealthsimple passkey challenge.",
+        )
+        options, key = challenge.get("options"), challenge.get("challenge_key")
+        if (
+            not isinstance(options, dict)
+            or not isinstance(options.get("challenge"), str)
+            or not options["challenge"]
+            or not isinstance(key, str)
+            or not key
+        ):
+            raise LoginFailedException("Wealthsimple returned invalid passkey options.")
+
+        assertion = get_assertion(options)
+        if (
+            not isinstance(assertion, dict)
+            or assertion.get("type") != "public-key"
+            or not assertion.get("id")
+            or not assertion.get("rawId")
+            or not isinstance(assertion.get("response"), dict)
+            or not all(
+                assertion["response"].get(field)
+                for field in ("authenticatorData", "clientDataJSON", "signature")
+            )
+        ):
+            raise LoginFailedException("No valid passkey assertion was provided.")
+
+        tokens = post(
+            token_url,
+            {
+                "grant_type": "webauthn",
+                "challenge_key": key,
+                "webauthn_credential": assertion,
+                "skip_provision": True,
+                "redirect_uri": "https://my.wealthsimple.com/app/login",
+                "scope": scope,
+                "client_id": ws.session.client_id,
+            },
+            {**headers, "x-ws-profile": "undefined"},
+            "Wealthsimple rejected the passkey exchange. Restart for a fresh challenge.",
+        )
+        token_type = tokens.get("token_type")
+        if not isinstance(token_type, str) or token_type.lower() != "bearer":
+            raise LoginFailedException("The passkey exchange did not return a bearer token.")
+        # OAuth responses can omit scope when it matches the original request.
+        if "scope" in tokens:
+            granted_scope = tokens["scope"]
+            if not isinstance(granted_scope, str) or not set(granted_scope.split()).issubset(scope.split()):
+                raise LoginFailedException("The passkey exchange returned unexpected scopes.")
+        access, refresh = tokens.get("access_token"), tokens.get("refresh_token")
+        if not isinstance(access, str) or not access or not isinstance(refresh, str) or not refresh:
+            raise LoginFailedException("The passkey exchange did not return reusable session tokens.")
+        ws.session.access_token, ws.session.refresh_token = access, refresh
+        ws._persist_session(persist_session_fct, username)
+        return ws.session
 
     def login_internal(
         self,
@@ -374,12 +528,7 @@ class WealthsimpleAPIBase:
         self.session.access_token = response_data["access_token"]
         self.session.refresh_token = response_data["refresh_token"]
 
-        # Persist the session if a persist function is provided
-        if persist_session_fct:
-            if len(signature(persist_session_fct).parameters) == 2:
-                persist_session_fct(self.session.to_json(), username)
-            else:
-                persist_session_fct(self.session.to_json())
+        self._persist_session(persist_session_fct, username)
 
         return self.session
 

@@ -17,8 +17,9 @@ class WSApiTest:
         # If you want, you can set a custom User-Agent for the requests to the WealthSimple API:
         WealthsimpleAPI.set_user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36")
 
-        # 2. If it's the first time you run this, create a new session using the username & password (and TOTP answer, if needed). Do NOT save those infos in your code!
-        username = input("Wealthsimple username (email): ")
+        # 2. If it's the first time you run this, create a new session using a PAsskey or username + password + (maybe) TOTP. Do NOT save those infos in your code!
+        session_name_prompt = "Session name (use your Wealthsimple email for password sign-in): "
+        username = input(session_name_prompt)
         session = keyring.get_password(f"{keyring_service_name}.{username}", "session")
         if session:
             try:
@@ -34,28 +35,54 @@ class WSApiTest:
             # 3b. Need to log-in interactively
             password = None
             otp_answer = None
+            use_passkey = None
             while True:
-                try:
-                    if not username:
-                        username = input("Wealthsimple username (email): ")
-                        session = keyring.get_password(f"{keyring_service_name}.{username}", "session")
-                        if session:
-                            session = WSAPISession.from_json(session)
-                            break
-                    if not password:
-                        password = getpass.getpass("Password: ")
-                    WealthsimpleAPI.login(username, password, otp_answer, persist_session_fct=persist_session_fct,
-                                          approval_callback=lambda: print("Approve the login in the Wealthsimple mobile app."))
-                    # The above will throw exceptions if login failed
-                    # So we break (out of the login "while True" loop) on success:
-                    session = WSAPISession.from_json(keyring.get_password(f"{keyring_service_name}.{username}", "session"))
-                    break
-                except OTPRequiredException:
-                    otp_answer = getpass.getpass("TOTP code: ")
-                except LoginFailedException:
-                    print("Login failed. Try again.")
-                    username = None
-                    password = None
+                if not username:
+                    username = input(session_name_prompt)
+                    session = keyring.get_password(
+                        f"{keyring_service_name}.{username}", "session"
+                    )
+                    if session:
+                        session = WSAPISession.from_json(session)
+                        break
+
+                if use_passkey is None:
+                    use_passkey = input("Use a passkey to log in? [Y/n]: ").strip().lower() in ("", "y", "yes")
+                if use_passkey:
+                    try:
+                        session = WealthsimpleAPI.login_with_passkey(
+                            username,
+                            WealthsimpleAPI.passkey_chrome_assertion,
+                            persist_session_fct=persist_session_fct,
+                        )
+                        # The above will throw exceptions if login failed
+                        # So we break (out of the login "while True" loop) on success:
+                        break
+                    except LoginFailedException as exc:
+                        print(f"Passkey login failed: {exc}")
+                        use_passkey = None
+                else:
+                    # 3b. Need to log-in interactively with email, password and (if needed) TOTP.
+                    try:
+                        if not password:
+                            password = getpass.getpass("Password: ")
+                        session = WealthsimpleAPI.login(
+                            username,
+                            password,
+                            otp_answer,
+                            persist_session_fct=persist_session_fct,
+                            approval_callback=lambda: print("Approve the login in the Wealthsimple mobile app.")
+                        )
+                        # The above will throw exceptions if login failed
+                        # So we break (out of the login "while True" loop) on success:
+                        break
+                    except OTPRequiredException:
+                        otp_answer = getpass.getpass("TOTP code: ")
+                    except LoginFailedException:
+                        print("Login failed. Try again.")
+                        use_passkey = None
+                        username = None
+                        password = None
             # Use the new session object to instantiate the API object
             ws = WealthsimpleAPI.from_token(session, persist_session_fct, username)
 
